@@ -217,6 +217,20 @@
       continueBtn.addEventListener('click', () => renderSetPasswordScreen(keyBytes, renderEditor));
     }
 
+        function renderShowRecoveryScreen(code) {
+      mainContent.innerHTML = `
+        <div class="panel">
+          <div class="recovery-box">
+            <h2>Code de récupération de cet appareil</h2>
+            <p class="warning">Note-le dans Bitwarden maintenant.</p>
+            <div class="recovery-code">${code}</div>
+          </div>
+          <button id="s-back-editor">Retour à l'éditeur</button>
+        </div>
+      `;
+      document.getElementById('s-back-editor').addEventListener('click', renderEditor);
+    }
+    
     // --- Éditeur ---
     let currentGtext = null;
     let currentJsonContent = null;
@@ -233,6 +247,7 @@
             <button id="s-encrypt">Chiffrer</button>
             <button id="s-ots" disabled>Horodater (OTS)</button>
             <button id="s-save" disabled>Enregistrer sur Kura</button>
+            <button id="s-show-recovery">Voir le code de récupération</button>
           </div>
           <div class="status" id="s-status"></div>
         </div>
@@ -302,6 +317,11 @@
           statusEl.textContent = 'Erreur : ' + e.message;
         }
       });
+          document.getElementById('s-show-recovery').addEventListener('click', async () => {
+      const keyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', currentCryptoKey));
+      const code = Scriptum.keyToRecoveryCode(keyBytes);
+      renderShowRecoveryScreen(code);
+    });
     }
 
     navScriptum.addEventListener('click', () => {
