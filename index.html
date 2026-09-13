@@ -154,6 +154,7 @@ if (pendingOpenParams) {
   renderEditor();
 }
         } catch (e) {
+          console.error(e);
           statusEl.textContent = 'Mot de passe incorrect.';
         }
       }
