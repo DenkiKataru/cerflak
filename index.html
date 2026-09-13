@@ -61,6 +61,7 @@
     const SCRIPTUM_API_SECRET = '16beff6e00557ee6b6e29a680f5ae3ca6818ee247b3263aed26e2c0afc0f9399';
 
     let currentCryptoKey = null;
+    let sessionPassword = null;
 
     async function sha256Base64(text) {
       const enc = new TextEncoder();
@@ -106,6 +107,7 @@
           const wrapped = await Scriptum.wrapMasterKeyWithPassword(keyBytes, p1);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped));
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
+          sessionPassword = p1;
           onDone();
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
@@ -135,6 +137,7 @@
         try {
           const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, passInput.value);
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
+          sessionPassword = passInput.value;
           renderEditor();
         } catch (e) {
           statusEl.textContent = 'Mot de passe incorrect.';
@@ -442,7 +445,7 @@ document.getElementById('s-export-odt').addEventListener('click', () => exportAs
         'X-Api-Secret': SCRIPTUM_API_SECRET,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ html: editorEl.innerHTML, format, filename }),
+      body: JSON.stringify({ html: editorEl.innerHTML, format, filename, password: format === 'pdf' ? sessionPassword : undefined }),
     });
     if (!resp.ok) throw new Error(`Échec de l'export (${resp.status})`);
     const blob = await resp.blob();
