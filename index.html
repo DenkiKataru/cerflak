@@ -281,6 +281,8 @@
             <button id="s-ots" disabled>Horodater (OTS)</button>
             <button id="s-save" disabled>Enregistrer sur Kura</button>
             <button id="s-open">Ouvrir</button>
+            <button id="s-export-pdf">Exporter en PDF</button>
+<button id="s-export-odt">Exporter en ODT</button>
             <button id="s-show-recovery">Voir le code de récupération</button>
           </div>
           <div class="status" id="s-status"></div>
@@ -424,8 +426,39 @@
         renderShowRecoveryScreen(code);
       });
       document.getElementById('s-open').addEventListener('click', renderOpenScreen);
+      document.getElementById('s-export-pdf').addEventListener('click', () => exportAs('pdf'));
+document.getElementById('s-export-odt').addEventListener('click', () => exportAs('odt'));
     }
 
+    async function exportAs(format) {
+  const editorEl = document.getElementById('s-text');
+  const statusElLocal = document.getElementById('s-status');
+  const filename = document.getElementById('s-filename').value.trim() || 'document';
+  statusElLocal.textContent = `Génération du ${format.toUpperCase()} en cours...`;
+  try {
+    const resp = await fetch(`${KURA_API_BASE}/export`, {
+      method: 'POST',
+      headers: {
+        'X-Api-Secret': SCRIPTUM_API_SECRET,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ html: editorEl.innerHTML, format, filename }),
+    });
+    if (!resp.ok) throw new Error(`Échec de l'export (${resp.status})`);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusElLocal.textContent = `${format.toUpperCase()} téléchargé.`;
+  } catch (e) {
+    statusElLocal.textContent = 'Erreur : ' + e.message;
+  }
+}
     function renderOpenScreen() {
   mainContent.innerHTML = `
     <div class="panel">
