@@ -40,7 +40,7 @@
 <body>
   <nav>
     <div class="icon" id="nav-scriptum" title="Scriptum">S</div>
-    <div class="icon"></div>
+    <div class="icon" id="nav-punkrecords" title="Punk Records">P</div>
     <div class="icon"></div>
     <div class="icon"></div>
     <div class="icon"></div>
@@ -54,6 +54,7 @@
   <script>
     const mainContent = document.getElementById('main-content');
     const navScriptum = document.getElementById('nav-scriptum');
+    const navPunkRecords = document.getElementById('nav-punkrecords');
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const KURA_API_SECRET = 'a3f92c81b47e05d6912fa338c7b90124de56af13c8091cd';
@@ -285,7 +286,7 @@
             <button id="s-save" disabled>Enregistrer sur Kura</button>
             <button id="s-open">Ouvrir</button>
             <button id="s-export-pdf">Exporter en PDF</button>
-<button id="s-export-odt">Exporter en ODT</button>
+            <button id="s-export-odt">Exporter en ODT</button>
             <button id="s-show-recovery">Voir le code de récupération</button>
           </div>
           <div class="status" id="s-status"></div>
@@ -393,166 +394,7 @@
               'X-Api-Secret': SCRIPTUM_API_SECRET,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ hash, email: 'guillaumegabory@proton.me' }),
-          });
-          if (!otsResp.ok) throw new Error(`Échec horodatage (${otsResp.status})`);
-          statusEl.textContent = 'Horodatage envoyé — confirmation par mail sous 24h.';
-        } catch (e) {
-          statusEl.textContent = 'Erreur OTS : ' + e.message;
-        }
-      });
-
-      saveBtn.addEventListener('click', async () => {
-        if (!currentJsonContent) return;
-        const subfolder = document.getElementById('s-subfolder').value.trim() || 'Divers';
-        const filename = document.getElementById('s-filename').value.trim() || `document-${Date.now()}`;
-        statusEl.textContent = 'Envoi vers Kura...';
-        try {
-          const saveResp = await fetch(`${KURA_API_BASE}/save`, {
-            method: 'POST',
-            headers: {
-              'X-Api-Secret': KURA_API_SECRET,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ subfolder, filename, content: currentJsonContent }),
-          });
-          if (!saveResp.ok) throw new Error(`Échec envoi (${saveResp.status})`);
-          statusEl.textContent = `Enregistré sur Kura : ${subfolder}/${filename}.gtext`;
-        } catch (e) {
-          statusEl.textContent = 'Erreur : ' + e.message;
-        }
-      });
-
-      document.getElementById('s-show-recovery').addEventListener('click', async () => {
-        const keyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', currentCryptoKey));
-        const code = Scriptum.keyToRecoveryCode(keyBytes);
-        renderShowRecoveryScreen(code);
-      });
-      document.getElementById('s-open').addEventListener('click', renderOpenScreen);
-      document.getElementById('s-export-pdf').addEventListener('click', () => exportAs('pdf'));
-document.getElementById('s-export-odt').addEventListener('click', () => exportAs('odt'));
-    }
-
-    async function exportAs(format) {
-  const editorEl = document.getElementById('s-text');
-  const statusElLocal = document.getElementById('s-status');
-  const filename = document.getElementById('s-filename').value.trim() || 'document';
-  statusElLocal.textContent = `Génération du ${format.toUpperCase()} en cours...`;
-  try {
-    const resp = await fetch(`${KURA_API_BASE}/export`, {
-      method: 'POST',
-      headers: {
-        'X-Api-Secret': SCRIPTUM_API_SECRET,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ html: editorEl.innerHTML, format, filename, password: format === 'pdf' ? sessionPassword : undefined }),
-    });
-    if (!resp.ok) throw new Error(`Échec de l'export (${resp.status})`);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    statusElLocal.textContent = `${format.toUpperCase()} téléchargé.`;
-  } catch (e) {
-    statusElLocal.textContent = 'Erreur : ' + e.message;
-  }
-}
-    function renderOpenScreen() {
-  mainContent.innerHTML = `
-    <div class="panel">
-      <h2>Ouvrir un fichier</h2>
-      <div class="row">
-        <input type="text" id="o-subfolder" placeholder="Sous-dossier (ex: Plumaisons)">
-        <button id="o-list-btn">Lister</button>
-      </div>
-      <div class="status" id="o-status"></div>
-      <div id="o-file-list"></div>
-      <button class="link-btn" id="o-back">Retour à l'éditeur</button>
-    </div>
-  `;
-  const statusEl = document.getElementById('o-status');
-  const listEl = document.getElementById('o-file-list');
-  const subfolderInput = document.getElementById('o-subfolder');
-
-  async function loadList() {
-    const subfolder = subfolderInput.value.trim() || 'Divers';
-    statusEl.textContent = 'Chargement...';
-    listEl.innerHTML = '';
-    try {
-      const resp = await fetch(`${KURA_API_BASE}/list?subfolder=${encodeURIComponent(subfolder)}`, {
-        headers: { 'X-Api-Secret': KURA_API_SECRET },
-      });
-      if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
-      const data = await resp.json();
-      if (!data.files || data.files.length === 0) {
-        statusEl.textContent = 'Aucun fichier dans ce sous-dossier.';
-        return;
-      }
-      statusEl.textContent = '';
-      data.files.forEach((name) => {
-        const btn = document.createElement('button');
-        btn.textContent = name;
-        btn.style.display = 'block';
-        btn.style.width = '100%';
-        btn.style.textAlign = 'left';
-        btn.style.marginBottom = '6px';
-        btn.addEventListener('click', () => openFile(subfolder, name));
-        listEl.appendChild(btn);
-      });
-    } catch (e) {
-      statusEl.textContent = 'Erreur : ' + e.message;
-    }
-  }
-
-  async function openFile(subfolder, filename) {
-    statusEl.textContent = 'Ouverture...';
-    try {
-      const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
-        headers: { 'X-Api-Secret': KURA_API_SECRET },
-      });
-      if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
-      const data = await resp.json();
-      const gtextObject = JSON.parse(data.content);
-      const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
-      currentGtext = gtextObject;
-      currentJsonContent = data.content;
-      renderEditor();
-      document.getElementById('s-text').innerHTML = html;
-      document.getElementById('s-subfolder').value = subfolder;
-      document.getElementById('s-filename').value = filename;
-      document.getElementById('s-ots').disabled = false;
-      document.getElementById('s-save').disabled = false;
-    } catch (e) {
-      statusEl.textContent = 'Erreur : ' + e.message;
-    }
-  }
-
-  document.getElementById('o-list-btn').addEventListener('click', loadList);
-  document.getElementById('o-back').addEventListener('click', renderEditor);
-}
-    navScriptum.addEventListener('click', () => {
-      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
-      navScriptum.classList.add('active');
-      if (currentCryptoKey) {
-        renderEditor();
-        return;
-      }
-      const wrapped = localStorage.getItem(STORAGE_KEY);
-      if (wrapped) {
-        renderUnlockScreen();
-      } else {
-        renderSetupScreen();
-      }
-    });
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
-  </script>
-</body>
-</html>
+            body: JSON.stringify({
+              hash,
+              email: 'guillaumegabory@proton.me',
+              content: currentJsonContent,
