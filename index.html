@@ -63,6 +63,14 @@
 
     let currentCryptoKey = null;
     let sessionPassword = null;
+    let pendingOpenParams = null;
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('fichier')) {
+  pendingOpenParams = {
+    subfolder: urlParams.get('dossier') || '',
+    filename: urlParams.get('fichier')
+  };
+}
 
     async function sha256Base64(text) {
       const enc = new TextEncoder();
@@ -138,8 +146,13 @@
         try {
           const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, passInput.value);
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
-          sessionPassword = passInput.value;
-          renderEditor();
+sessionPassword = passInput.value;
+if (pendingOpenParams) {
+  openFile(pendingOpenParams.subfolder, pendingOpenParams.filename);
+  pendingOpenParams = null;
+} else {
+  renderEditor();
+}
         } catch (e) {
           statusEl.textContent = 'Mot de passe incorrect.';
         }
