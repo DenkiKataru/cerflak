@@ -544,7 +544,10 @@
       document.getElementById('o-back').addEventListener('click', renderEditor);
     }
 
+    // --- Punk Records ---
+    const PR_TYPES = ['PDF', 'SONS', 'VIDÉOS'];
     let rimesData = null;
+
     async function loadRimes() {
       if (rimesData) return rimesData;
       const resp = await fetch('rimes.json');
@@ -552,24 +555,36 @@
       return rimesData;
     }
 
+    function mediaUrl(type, filename) {
+      return `${KURA_API_BASE}/media-file?type=${encodeURIComponent(type)}&filename=${encodeURIComponent(filename)}&secret=${KURA_API_SECRET}`;
+    }
+
     function renderPunkRecords() {
       mainContent.innerHTML = `
         <div class="panel">
-          <h2>Punk Records — Recherche de rimes</h2>
+          <h2>Punk Records</h2>
           <div class="row">
-            <input type="text" id="pr-rhyme-input" placeholder="Tape un mot (ex: amour)">
+            <button id="pr-cat-PDF">PDF</button>
+            <button id="pr-cat-SONS">Sons</button>
+            <button id="pr-cat-VIDÉOS">Vidéos</button>
+          </div>
+          <div class="row">
+            <input type="text" id="pr-rhyme-input" placeholder="Chercher des fichiers par mot-clé qui rime (ex: amour)">
             <button id="pr-rhyme-btn">Chercher</button>
           </div>
-          <div class="status" id="pr-rhyme-status"></div>
-          <div id="pr-rhyme-results"></div>
+          <div class="status" id="pr-status"></div>
+          <div id="pr-results"></div>
         </div>
       `;
-      const statusEl = document.getElementById('pr-rhyme-status');
-      const resultsEl = document.getElementById('pr-rhyme-results');
-      const input = document.getElementById('pr-rhyme-input');
+      const statusEl = document.getElementById('pr-status');
+      const resultsEl = document.getElementById('pr-results');
 
-      async function doSearch() {
-        const word = input.value.trim().toLowerCase();
+      PR_TYPES.forEach((type) => {
+        document.getElementById(`pr-cat-${type}`).addEventListener('click', () => renderPunkRecordsList(type));
+      });
+
+      async function doRhymeSearch() {
+        const word = document.getElementById('pr-rhyme-input').value.trim().toLowerCase();
         resultsEl.innerHTML = '';
         if (!word) return;
         statusEl.textContent = 'Recherche...';
@@ -582,51 +597,84 @@
           }
           const key = entry[0].slice(0, 2);
           const matches = [];
-          for (const w in rimesData) {
-            if (w === word) continue;
-            const r = rimesData[w];
-            if (r[0].slice(0, 2) === key) matches.push([w, r[1]]);
+          for (const type of PR_TYPES) {
+            const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
+              headers: { 'X-Api-Secret': KURA_API_SECRET },
+            });
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            (data.files || []).forEach((f) => {
+              (f.keywords || []).forEach((kw) => {
+                const kwEntry = rimesData[kw.trim().toLowerCase()];
+                if (kwEntry && kwEntry[0].slice(0, 2) === key) {
+                  matches.push({ type, name: f.name, keyword: kw });
+                }
+              });
+            });
           }
-          matches.sort((a, b) => b[1] - a[1]);
           if (matches.length === 0) {
-            statusEl.textContent = `Aucune rime trouvée pour "${word}".`;
+            statusEl.textContent = `Aucun fichier avec un mot-clé rimant avec "${word}".`;
             return;
           }
-          statusEl.textContent = `${matches.length} rime(s) trouvée(s) pour "${word}" :`;
-          resultsEl.innerHTML = matches.slice(0, 60).map(([w]) => `<span style="display:inline-block;margin:3px 6px 3px 0;">${w}</span>`).join('');
+          statusEl.textContent = `${matches.length} fichier(s) trouvé(s) :`;
+          matches.forEach((m) => {
+            const btn = document.createElement('button');
+            btn.textContent = `${m.name} (${m.type}, mot-clé : ${m.keyword})`;
+            btn.style.display = 'block';
+            btn.style.width = '100%';
+            btn.style.textAlign = 'left';
+            btn.style.marginBottom = '6px';
+            btn.addEventListener('click', () => renderPunkRecordsDetail(m.type, m.name));
+            resultsEl.appendChild(btn);
+          });
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
         }
       }
 
-      document.getElementById('pr-rhyme-btn').addEventListener('click', doSearch);
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+      document.getElementById('pr-rhyme-btn').addEventListener('click', doRhymeSearch);
+      document.getElementById('pr-rhyme-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doRhymeSearch(); });
     }
 
-    navScriptum.addEventListener('click', () => {
-      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
-      navScriptum.classList.add('active');
-      if (currentCryptoKey) {
-        renderEditor();
-        return;
-      }
-      const wrapped = localStorage.getItem(STORAGE_KEY);
-      if (wrapped) {
-        renderUnlockScreen();
-      } else {
-        renderSetupScreen();
-      }
-    });
+    async function renderPunkRecordsList(type) {
+      mainContent.innerHTML = `
+        <div class="panel">
+          <h2>Punk Records — ${type}</h2>
+          <div class="status" id="prl-status">Chargement...</div>
+          <div id="prl-list"></div>
+          <button class="link-btn" id="prl-back">Retour</button>
+        </div>
+      `;
+      const statusEl = document.getElementById('prl-status');
+      const listEl = document.getElementById('prl-list');
+      document.getElementById('prl-back').addEventListener('click', renderPunkRecords);
 
-    navPunkRecords.addEventListener('click', () => {
-      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
-      navPunkRecords.classList.add('active');
-      renderPunkRecords();
-    });
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      try {
+        const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
+          headers: { 'X-Api-Secret': KURA_API_SECRET },
+        });
+        if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
+        const data = await resp.json();
+        if (!data.files || data.files.length === 0) {
+          statusEl.textContent = 'Aucun fichier trouvé.';
+          return;
+        }
+        statusEl.textContent = '';
+        data.files.forEach((f) => {
+          const btn = document.createElement('button');
+          btn.textContent = f.keywords.length ? `${f.name} — ${f.keywords.join(', ')}` : f.name;
+          btn.style.display = 'block';
+          btn.style.width = '100%';
+          btn.style.textAlign = 'left';
+          btn.style.marginBottom = '6px';
+          btn.addEventListener('click', () => renderPunkRecordsDetail(type, f.name));
+          listEl.appendChild(btn);
+        });
+      } catch (e) {
+        statusEl.textContent = 'Erreur : ' + e.message;
+      }
     }
-  </script>
-</body>
-</html>
+
+    function renderPunkRecordsDetail(type, filename) {
+      const url = mediaUrl(type, filename);
+      let
