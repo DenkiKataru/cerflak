@@ -677,4 +677,88 @@
 
     function renderPunkRecordsDetail(type, filename) {
       const url = mediaUrl(type, filename);
-      let
+      let mediaHtml = '';
+      if (type === 'PDF') {
+        mediaHtml = `<iframe src="${url}" style="width:100%;height:500px;border:1px solid #333;border-radius:8px;"></iframe>`;
+      } else if (type === 'SONS') {
+        mediaHtml = `<audio controls style="width:100%;" src="${url}"></audio>`;
+      } else {
+        mediaHtml = `<video controls style="width:100%;max-height:500px;background:#000;" src="${url}"></video>`;
+      }
+      mainContent.innerHTML = `
+        <div class="panel">
+          <h2>${filename}</h2>
+          ${mediaHtml}
+          <div class="row">
+            <input type="text" id="prd-keywords" placeholder="Mots-clés, séparés par des virgules">
+            <button id="prd-save-keywords">Enregistrer les mots-clés</button>
+          </div>
+          <div class="status" id="prd-status"></div>
+          <button class="link-btn" id="prd-back">Retour à ${type}</button>
+        </div>
+      `;
+      const statusEl = document.getElementById('prd-status');
+      const keywordsInput = document.getElementById('prd-keywords');
+
+      document.getElementById('prd-back').addEventListener('click', () => renderPunkRecordsList(type));
+
+      (async () => {
+        try {
+          const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
+            headers: { 'X-Api-Secret': KURA_API_SECRET },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const file = (data.files || []).find((f) => f.name === filename);
+            if (file) keywordsInput.value = file.keywords.join(', ');
+          }
+        } catch (e) {}
+      })();
+
+      document.getElementById('prd-save-keywords').addEventListener('click', async () => {
+        const keywords = keywordsInput.value.split(',').map((k) => k.trim()).filter(Boolean);
+        statusEl.textContent = 'Enregistrement...';
+        try {
+          const resp = await fetch(`${KURA_API_BASE}/media-keywords`, {
+            method: 'POST',
+            headers: {
+              'X-Api-Secret': KURA_API_SECRET,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ type, filename, keywords }),
+          });
+          if (!resp.ok) throw new Error(`Échec (${resp.status})`);
+          statusEl.textContent = 'Mots-clés enregistrés.';
+        } catch (e) {
+          statusEl.textContent = 'Erreur : ' + e.message;
+        }
+      });
+    }
+
+    navScriptum.addEventListener('click', () => {
+      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
+      navScriptum.classList.add('active');
+      if (currentCryptoKey) {
+        renderEditor();
+        return;
+      }
+      const wrapped = localStorage.getItem(STORAGE_KEY);
+      if (wrapped) {
+        renderUnlockScreen();
+      } else {
+        renderSetupScreen();
+      }
+    });
+
+    navPunkRecords.addEventListener('click', () => {
+      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
+      navPunkRecords.classList.add('active');
+      renderPunkRecords();
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
