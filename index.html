@@ -280,6 +280,7 @@
             <button id="s-encrypt">Chiffrer</button>
             <button id="s-ots" disabled>Horodater (OTS)</button>
             <button id="s-save" disabled>Enregistrer sur Kura</button>
+            <button id="s-open">Ouvrir</button>
             <button id="s-show-recovery">Voir le code de récupération</button>
           </div>
           <div class="status" id="s-status"></div>
@@ -422,8 +423,82 @@
         const code = Scriptum.keyToRecoveryCode(keyBytes);
         renderShowRecoveryScreen(code);
       });
+      document.getElementById('s-open').addEventListener('click', renderOpenScreen);
     }
 
+    function renderOpenScreen() {
+  mainContent.innerHTML = `
+    <div class="panel">
+      <h2>Ouvrir un fichier</h2>
+      <div class="row">
+        <input type="text" id="o-subfolder" placeholder="Sous-dossier (ex: Plumaisons)">
+        <button id="o-list-btn">Lister</button>
+      </div>
+      <div class="status" id="o-status"></div>
+      <div id="o-file-list"></div>
+      <button class="link-btn" id="o-back">Retour à l'éditeur</button>
+    </div>
+  `;
+  const statusEl = document.getElementById('o-status');
+  const listEl = document.getElementById('o-file-list');
+  const subfolderInput = document.getElementById('o-subfolder');
+
+  async function loadList() {
+    const subfolder = subfolderInput.value.trim() || 'Divers';
+    statusEl.textContent = 'Chargement...';
+    listEl.innerHTML = '';
+    try {
+      const resp = await fetch(`${KURA_API_BASE}/list?subfolder=${encodeURIComponent(subfolder)}`, {
+        headers: { 'X-Api-Secret': KURA_API_SECRET },
+      });
+      if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
+      const data = await resp.json();
+      if (!data.files || data.files.length === 0) {
+        statusEl.textContent = 'Aucun fichier dans ce sous-dossier.';
+        return;
+      }
+      statusEl.textContent = '';
+      data.files.forEach((name) => {
+        const btn = document.createElement('button');
+        btn.textContent = name;
+        btn.style.display = 'block';
+        btn.style.width = '100%';
+        btn.style.textAlign = 'left';
+        btn.style.marginBottom = '6px';
+        btn.addEventListener('click', () => openFile(subfolder, name));
+        listEl.appendChild(btn);
+      });
+    } catch (e) {
+      statusEl.textContent = 'Erreur : ' + e.message;
+    }
+  }
+
+  async function openFile(subfolder, filename) {
+    statusEl.textContent = 'Ouverture...';
+    try {
+      const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
+        headers: { 'X-Api-Secret': KURA_API_SECRET },
+      });
+      if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
+      const data = await resp.json();
+      const gtextObject = JSON.parse(data.content);
+      const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
+      currentGtext = gtextObject;
+      currentJsonContent = data.content;
+      renderEditor();
+      document.getElementById('s-text').innerHTML = html;
+      document.getElementById('s-subfolder').value = subfolder;
+      document.getElementById('s-filename').value = filename;
+      document.getElementById('s-ots').disabled = false;
+      document.getElementById('s-save').disabled = false;
+    } catch (e) {
+      statusEl.textContent = 'Erreur : ' + e.message;
+    }
+  }
+
+  document.getElementById('o-list-btn').addEventListener('click', loadList);
+  document.getElementById('o-back').addEventListener('click', renderEditor);
+}
     navScriptum.addEventListener('click', () => {
       document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
       navScriptum.classList.add('active');
