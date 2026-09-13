@@ -147,12 +147,7 @@ if (urlParams.get('fichier')) {
           const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, passInput.value);
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
 sessionPassword = passInput.value;
-if (pendingOpenParams) {
-  openFile(pendingOpenParams.subfolder, pendingOpenParams.filename);
-  pendingOpenParams = null;
-} else {
-  renderEditor();
-}
+renderEditor();
         } catch (e) {
           console.error(e);
           statusEl.textContent = 'Mot de passe incorrect.';
@@ -556,7 +551,12 @@ if (pendingOpenParams) {
 
       document.getElementById('o-list-btn').addEventListener('click', loadList);
       document.getElementById('o-back').addEventListener('click', renderEditor);
-    }
+if (pendingOpenParams) {
+  const p = pendingOpenParams;
+  pendingOpenParams = null;
+  openFile(p.subfolder, p.filename);
+}
+}
 
     // --- Punk Records ---
     const PR_TYPES = ['PDF', 'SONS', 'VIDÉOS'];
