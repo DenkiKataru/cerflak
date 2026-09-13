@@ -24,6 +24,17 @@
     .recovery-box { background:#1a1a1a; border:2px solid #4a7; border-radius:8px; padding:16px; }
     .recovery-code { font-family:monospace; font-size:16px; word-break:break-all; color:#4a7; margin:10px 0; }
     .warning { color:#e94; font-size:13px; }
+
+    /* --- Barre de formatage --- */
+    .toolbar-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .tb-btn { background:#333; color:#eee; border:1px solid #444; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; }
+    .tb-btn:hover { background:#444; }
+    .tb-btn.active { background:#4a7; border-color:#4a7; }
+    .tb-sep { width:1px; height:22px; background:#444; margin:0 4px; }
+    .tb-select { background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:6px; padding:6px 8px; font-family:monospace; }
+    .editor { width:100%; min-height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:'Bookman Old Style','Book Antiqua',Palatino,serif; font-size:11pt; box-sizing:border-box; overflow-y:auto; }
+    .editor:focus { outline:1px solid #4a7; }
+    .editor:empty:before { content: attr(data-placeholder); color:#666; }
   </style>
 </head>
 <body>
@@ -217,7 +228,7 @@
       continueBtn.addEventListener('click', () => renderSetPasswordScreen(keyBytes, renderEditor));
     }
 
-        function renderShowRecoveryScreen(code) {
+    function renderShowRecoveryScreen(code) {
       mainContent.innerHTML = `
         <div class="panel">
           <div class="recovery-box">
@@ -230,7 +241,7 @@
       `;
       document.getElementById('s-back-editor').addEventListener('click', renderEditor);
     }
-    
+
     // --- Éditeur ---
     let currentGtext = null;
     let currentJsonContent = null;
@@ -242,7 +253,29 @@
             <input type="text" id="s-subfolder" placeholder="Sous-dossier (ex: Plumaisons)">
             <input type="text" id="s-filename" placeholder="Nom du fichier (ex: poeme1)">
           </div>
-          <textarea id="s-text" placeholder="Écris ici..."></textarea>
+          <div class="toolbar-row" id="fmt-toolbar">
+            <button type="button" class="tb-btn" id="btn-bold" title="Gras (Ctrl+B)"><b>G</b></button>
+            <button type="button" class="tb-btn" id="btn-italic" title="Italique (Ctrl+I)"><i>I</i></button>
+            <button type="button" class="tb-btn" id="btn-underline" title="Souligné (Ctrl+U)"><u>S</u></button>
+            <div class="tb-sep"></div>
+            <button type="button" class="tb-btn" id="btn-align-left" title="Aligner à gauche">⇤</button>
+            <button type="button" class="tb-btn" id="btn-align-center" title="Centrer">↔</button>
+            <button type="button" class="tb-btn" id="btn-align-right" title="Aligner à droite">⇥</button>
+            <button type="button" class="tb-btn" id="btn-align-justify" title="Justifier">≡</button>
+            <div class="tb-sep"></div>
+            <select class="tb-select" id="size-select" title="Taille">
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11" selected>11</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16">16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="24">24</option>
+            </select>
+          </div>
+          <div id="s-text" class="editor" contenteditable="true" data-placeholder="Écris ici..."></div>
           <div class="row">
             <button id="s-encrypt">Chiffrer</button>
             <button id="s-ots" disabled>Horodater (OTS)</button>
@@ -255,8 +288,74 @@
       const statusEl = document.getElementById('s-status');
       const otsBtn = document.getElementById('s-ots');
       const saveBtn = document.getElementById('s-save');
+      const editor = document.getElementById('s-text');
 
-      document.getElementById('s-text').addEventListener('input', () => {
+      editor.style.fontSize = '11pt';
+
+      // --- Formatage : gras / italique / souligné / alignements / taille ---
+      let savedRange = null;
+      function saveSelection() {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+        }
+      }
+      function restoreSelection() {
+        if (savedRange) {
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+        }
+      }
+      function updateToolbarState() {
+        document.getElementById('btn-bold').classList.toggle('active', document.queryCommandState('bold'));
+        document.getElementById('btn-italic').classList.toggle('active', document.queryCommandState('italic'));
+        document.getElementById('btn-underline').classList.toggle('active', document.queryCommandState('underline'));
+      }
+      function fmt(cmd) {
+        editor.focus();
+        document.execCommand(cmd, false, null);
+        updateToolbarState();
+      }
+      function applySize(size) {
+        editor.focus();
+        restoreSelection();
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
+          document.execCommand('fontSize', false, '7');
+          editor.querySelectorAll('font[size="7"]').forEach((el) => {
+            const span = document.createElement('span');
+            span.style.fontSize = size + 'pt';
+            span.innerHTML = el.innerHTML;
+            el.replaceWith(span);
+          });
+        } else {
+          editor.style.fontSize = size + 'pt';
+        }
+      }
+
+      document.getElementById('btn-bold').addEventListener('click', () => fmt('bold'));
+      document.getElementById('btn-italic').addEventListener('click', () => fmt('italic'));
+      document.getElementById('btn-underline').addEventListener('click', () => fmt('underline'));
+      document.getElementById('btn-align-left').addEventListener('click', () => fmt('justifyLeft'));
+      document.getElementById('btn-align-center').addEventListener('click', () => fmt('justifyCenter'));
+      document.getElementById('btn-align-right').addEventListener('click', () => fmt('justifyRight'));
+      document.getElementById('btn-align-justify').addEventListener('click', () => fmt('justifyFull'));
+
+      const sizeSelect = document.getElementById('size-select');
+      editor.addEventListener('mouseup', saveSelection);
+      editor.addEventListener('keyup', saveSelection);
+      sizeSelect.addEventListener('mousedown', saveSelection);
+      sizeSelect.addEventListener('change', () => applySize(sizeSelect.value));
+
+      document.addEventListener('selectionchange', () => {
+        const sel = window.getSelection();
+        if (document.activeElement === editor || (sel.anchorNode && editor.contains(sel.anchorNode))) {
+          updateToolbarState();
+        }
+      });
+
+      editor.addEventListener('input', () => {
         currentGtext = null;
         currentJsonContent = null;
         otsBtn.disabled = true;
@@ -264,10 +363,10 @@
       });
 
       document.getElementById('s-encrypt').addEventListener('click', async () => {
-        const text = document.getElementById('s-text').value;
+        const html = editor.innerHTML;
         statusEl.textContent = 'Chiffrement en cours...';
         try {
-          currentGtext = await Scriptum.encryptWithKey(text, currentCryptoKey);
+          currentGtext = await Scriptum.encryptWithKey(html, currentCryptoKey);
           currentJsonContent = JSON.stringify(currentGtext);
           otsBtn.disabled = false;
           saveBtn.disabled = false;
@@ -317,11 +416,12 @@
           statusEl.textContent = 'Erreur : ' + e.message;
         }
       });
-          document.getElementById('s-show-recovery').addEventListener('click', async () => {
-      const keyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', currentCryptoKey));
-      const code = Scriptum.keyToRecoveryCode(keyBytes);
-      renderShowRecoveryScreen(code);
-    });
+
+      document.getElementById('s-show-recovery').addEventListener('click', async () => {
+        const keyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', currentCryptoKey));
+        const code = Scriptum.keyToRecoveryCode(keyBytes);
+        renderShowRecoveryScreen(code);
+      });
     }
 
     navScriptum.addEventListener('click', () => {
