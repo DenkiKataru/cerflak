@@ -71,7 +71,6 @@ if (urlParams.get('fichier')) {
     filename: urlParams.get('fichier')
   };
 }
-    alert('Params URL : ' + JSON.stringify(pendingOpenParams));
 
     async function sha256Base64(text) {
       const enc = new TextEncoder();
@@ -148,7 +147,11 @@ if (urlParams.get('fichier')) {
           const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, passInput.value);
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
 sessionPassword = passInput.value;
-renderEditor();
+if (pendingOpenParams) {
+  renderOpenScreen();
+} else {
+  renderEditor();
+}
         } catch (e) {
           console.error(e);
           statusEl.textContent = 'Mot de passe incorrect.';
@@ -552,7 +555,6 @@ renderEditor();
 
       document.getElementById('o-list-btn').addEventListener('click', loadList);
       document.getElementById('o-back').addEventListener('click', renderEditor);
-      alert('renderEditor appelé, pendingOpenParams = ' + JSON.stringify(pendingOpenParams));
 if (pendingOpenParams) {
   const p = pendingOpenParams;
   pendingOpenParams = null;
