@@ -57,11 +57,12 @@
     const navPunkRecords = document.getElementById('nav-punkrecords');
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
-    const KURA_API_SECRET = 'a3f92c81b47e05d6912fa338c7b90124de56af13c8091cd';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
-    const SCRIPTUM_API_SECRET = '16beff6e00557ee6b6e29a680f5ae3ca6818ee247b3263aed26e2c0afc0f9399';
 
+    const TOKEN_STORAGE_KEY = 'cerflak-api-token-enc';
     let currentCryptoKey = null;
+    let apiToken = null; // jeton unique Kura + OTS/export : en mémoire seulement, chiffré sur disque
+    let postUnlockAction = null; // où aller après un déverrouillage (ex. Punk Records)
     let sessionPassword = null;
     let pendingOpenParams = null;
 const urlParams = new URLSearchParams(window.location.search);
@@ -71,6 +72,55 @@ if (urlParams.get('fichier')) {
     filename: urlParams.get('fichier')
   };
 }
+
+
+    // --- Jeton d'accès (Kura + horodatage/export) : demandé une fois, gardé chiffré avec la clé de Scriptum ---
+    async function loadStoredToken() {
+      try {
+        const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (!stored) return null;
+        return await Scriptum.decryptWithKey(JSON.parse(stored), currentCryptoKey);
+      } catch (e) {
+        return null; // illisible (autre clé) : on le redemandera
+      }
+    }
+
+    function renderTokenScreen(next) {
+      mainContent.innerHTML = `
+        <div class="panel">
+          <h2>Jeton d'accès</h2>
+          <p>Colle le jeton depuis Bitwarden. Il ne sera demandé qu'une fois sur cet appareil.</p>
+          <form id="t-form" class="row">
+            <input type="password" id="t-input" placeholder="Jeton" autocomplete="off">
+            <button type="submit">Valider</button>
+          </form>
+          <div class="status" id="t-status"></div>
+        </div>
+      `;
+      const statusEl = document.getElementById('t-status');
+      document.getElementById('t-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('t-input');
+        const token = input.value.trim();
+        if (!token) { statusEl.textContent = 'Le jeton est vide.'; return; }
+        try {
+          const enc = await Scriptum.encryptWithKey(token, currentCryptoKey);
+          localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(enc));
+          apiToken = token;
+          input.value = '';
+          next();
+        } catch (err) {
+          statusEl.textContent = 'Erreur : ' + err.message;
+        }
+      });
+    }
+
+    // À appeler juste après un déverrouillage réussi : remet le jeton en mémoire, ou le demande s'il manque
+    async function ensureApiToken(next) {
+      apiToken = await loadStoredToken();
+      if (apiToken) next();
+      else renderTokenScreen(next);
+    }
 
     async function sha256Base64(text) {
       const enc = new TextEncoder();
@@ -117,7 +167,7 @@ if (urlParams.get('fichier')) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped));
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
           sessionPassword = p1;
-          onDone();
+          ensureApiToken(onDone);
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
         }
@@ -150,15 +200,18 @@ if (urlParams.get('fichier')) {
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
 sessionPassword = typedPassword;
 passInput.value = ''; // on vide le champ : rien ne reste dans la page
-if (pendingOpenParams) {
-  renderOpenScreen();
-} else {
-  renderEditor();
-}
         } catch (e) {
           console.error(e);
           statusEl.textContent = 'Mot de passe incorrect.';
+          return;
         }
+        ensureApiToken(() => {
+          const action = postUnlockAction;
+          postUnlockAction = null;
+          if (action) action();
+          else if (pendingOpenParams) renderOpenScreen();
+          else renderEditor();
+        });
       }
 
       // Le formulaire sert à Bitwarden ; on bloque l'envoi réel (pas de rechargement de page)
@@ -410,7 +463,7 @@ if (pendingOpenParams) {
           const otsResp = await fetch(OTS_API_URL, {
             method: 'POST',
             headers: {
-              'X-Api-Secret': SCRIPTUM_API_SECRET,
+              'X-Api-Secret': apiToken,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
@@ -437,7 +490,7 @@ if (pendingOpenParams) {
           const saveResp = await fetch(`${KURA_API_BASE}/save`, {
             method: 'POST',
             headers: {
-              'X-Api-Secret': KURA_API_SECRET,
+              'X-Api-Secret': apiToken,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ subfolder, filename, content: currentJsonContent }),
@@ -468,7 +521,7 @@ if (pendingOpenParams) {
         const resp = await fetch(`${KURA_API_BASE}/export`, {
           method: 'POST',
           headers: {
-            'X-Api-Secret': SCRIPTUM_API_SECRET,
+            'X-Api-Secret': apiToken,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ html: editorEl.innerHTML, format, filename, password: format === 'pdf' ? sessionPassword : undefined }),
@@ -512,7 +565,7 @@ if (pendingOpenParams) {
         listEl.innerHTML = '';
         try {
           const resp = await fetch(`${KURA_API_BASE}/list?subfolder=${encodeURIComponent(subfolder)}`, {
-            headers: { 'X-Api-Secret': KURA_API_SECRET },
+            headers: { 'X-Api-Secret': apiToken },
           });
           if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
           const data = await resp.json();
@@ -540,7 +593,7 @@ if (pendingOpenParams) {
         statusEl.textContent = 'Ouverture...';
         try {
           const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
-            headers: { 'X-Api-Secret': KURA_API_SECRET },
+            headers: { 'X-Api-Secret': apiToken },
           });
           if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
           const data = await resp.json();
@@ -580,7 +633,7 @@ if (pendingOpenParams) {
     }
 
     function mediaUrl(type, filename) {
-      return `${KURA_API_BASE}/media-file?type=${encodeURIComponent(type)}&filename=${encodeURIComponent(filename)}&secret=${KURA_API_SECRET}`;
+      return `${KURA_API_BASE}/media-file?type=${encodeURIComponent(type)}&filename=${encodeURIComponent(filename)}&secret=${apiToken}`;
     }
 
     function renderPunkRecords() {
@@ -623,7 +676,7 @@ if (pendingOpenParams) {
           const matches = [];
           for (const type of PR_TYPES) {
             const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
-              headers: { 'X-Api-Secret': KURA_API_SECRET },
+              headers: { 'X-Api-Secret': apiToken },
             });
             if (!resp.ok) continue;
             const data = await resp.json();
@@ -675,7 +728,7 @@ if (pendingOpenParams) {
 
       try {
         const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
-          headers: { 'X-Api-Secret': KURA_API_SECRET },
+          headers: { 'X-Api-Secret': apiToken },
         });
         if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
         const data = await resp.json();
@@ -729,7 +782,7 @@ if (pendingOpenParams) {
       (async () => {
         try {
           const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, {
-            headers: { 'X-Api-Secret': KURA_API_SECRET },
+            headers: { 'X-Api-Secret': apiToken },
           });
           if (resp.ok) {
             const data = await resp.json();
@@ -746,7 +799,7 @@ if (pendingOpenParams) {
           const resp = await fetch(`${KURA_API_BASE}/media-keywords`, {
             method: 'POST',
             headers: {
-              'X-Api-Secret': KURA_API_SECRET,
+              'X-Api-Secret': apiToken,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ type, filename, keywords }),
@@ -777,7 +830,16 @@ if (pendingOpenParams) {
     navPunkRecords.addEventListener('click', () => {
       document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
       navPunkRecords.classList.add('active');
-      renderPunkRecords();
+      if (apiToken) {
+        renderPunkRecords();
+      } else if (currentCryptoKey) {
+        ensureApiToken(renderPunkRecords);
+      } else if (localStorage.getItem(STORAGE_KEY)) {
+        postUnlockAction = renderPunkRecords;
+        renderUnlockScreen();
+      } else {
+        renderSetupScreen();
+      }
     });
 
     if ('serviceWorker' in navigator) {
