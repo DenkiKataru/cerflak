@@ -129,10 +129,11 @@ if (urlParams.get('fichier')) {
       mainContent.innerHTML = `
         <div class="panel">
           <h2>Scriptum</h2>
-          <div class="row">
-            <input type="password" id="s-unlock-pass" placeholder="Mot de passe">
-            <button id="s-unlock-btn">Déverrouiller</button>
-          </div>
+          <form id="s-unlock-form" class="row" autocomplete="on">
+            <input type="text" id="s-unlock-user" name="username" value="cerflak" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;">
+            <input type="password" id="s-unlock-pass" name="password" placeholder="Mot de passe" autocomplete="current-password">
+            <button type="submit" id="s-unlock-btn">Déverrouiller</button>
+          </form>
           <div class="status" id="s-unlock-status"></div>
           <button class="link-btn" id="s-forgot">Mot de passe oublié ? Restaurer avec un code de récupération</button>
         </div>
@@ -142,11 +143,13 @@ if (urlParams.get('fichier')) {
 
       async function attemptUnlock() {
         const wrapped = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const typedPassword = passInput.value;
         statusEl.textContent = 'Déverrouillage...';
         try {
-          const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, passInput.value);
+          const keyBytes = await Scriptum.unwrapMasterKeyWithPassword(wrapped, typedPassword);
           currentCryptoKey = await Scriptum.importMasterKey(keyBytes);
-sessionPassword = passInput.value;
+sessionPassword = typedPassword;
+passInput.value = ''; // on vide le champ : rien ne reste dans la page
 if (pendingOpenParams) {
   renderOpenScreen();
 } else {
@@ -158,8 +161,11 @@ if (pendingOpenParams) {
         }
       }
 
-      document.getElementById('s-unlock-btn').addEventListener('click', attemptUnlock);
-      passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptUnlock(); });
+      // Le formulaire sert à Bitwarden ; on bloque l'envoi réel (pas de rechargement de page)
+      document.getElementById('s-unlock-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        attemptUnlock();
+      });
       document.getElementById('s-forgot').addEventListener('click', renderRestoreScreen);
     }
 

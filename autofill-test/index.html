@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Test remplissage Bitwarden (jetable)</title>
+<style>
+  body { font-family: sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; line-height: 1.45; }
+  h1 { font-size: 1.3rem; }
+  form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+  input[type=password], input[type=text] { padding: 12px; font-size: 1rem; border: 1px solid #888; border-radius: 6px; flex: 1; min-width: 140px; }
+  button { padding: 12px 16px; font-size: 1rem; border-radius: 8px; border: 1px solid #888; background: #eef; }
+  .result { font-weight: bold; padding: 12px; border-radius: 8px; background: #eee; }
+  .result.ok { background: #d8f5d8; }
+  small { color: #555; }
+</style>
+</head>
+<body>
+<h1>Test de remplissage Bitwarden — page jetable</h1>
+<p><small>Même formulaire que l'écran de déverrouillage de Scriptum. Rien n'est enregistré ni envoyé : la page affiche seulement le nombre de caractères reçus. Utilise un faux mot de passe, pas le vrai.</small></p>
+
+<form id="f" autocomplete="on">
+  <input type="text" id="u" name="username" value="cerflak" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;">
+  <input type="password" id="p" name="password" placeholder="Mot de passe" autocomplete="current-password">
+  <button type="submit">Déverrouiller</button>
+</form>
+
+<div id="result" class="result">En attente.</div>
+<p><small>Si Bitwarden ne propose rien : essaie la variante avec l'identifiant visible, en ajoutant <code>?id=visible</code> à l'adresse.</small></p>
+
+<script>
+'use strict';
+// Variante de secours : identifiant « cerflak » visible, pour savoir si c'est le champ masqué qui gêne.
+if (new URLSearchParams(location.search).get('id') === 'visible') {
+  const u = document.getElementById('u');
+  u.removeAttribute('style');
+  u.removeAttribute('tabindex');
+  u.removeAttribute('aria-hidden');
+  u.readOnly = true;
+}
+document.getElementById('f').addEventListener('submit', (e) => {
+  e.preventDefault(); // aucun envoi réel
+  const p = document.getElementById('p');
+  const r = document.getElementById('result');
+  const n = p.value.length;
+  p.value = ''; // rien n'est conservé
+  r.textContent = n > 0 ? 'Mot de passe reçu (' + n + ' caractère' + (n > 1 ? 's' : '') + ').' : 'Champ vide : rien reçu.';
+  r.className = 'result' + (n > 0 ? ' ok' : '');
+});
+</script>
+</body>
+</html>
