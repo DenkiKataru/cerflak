@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cerflak-shell-v2';
+const CACHE_NAME = 'cerflak-shell-v3';
 const SHELL_FILES = ['./index.html', './scriptum.js', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
