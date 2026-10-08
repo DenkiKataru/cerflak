@@ -47,6 +47,10 @@
     .editor:focus { outline:1px solid #4a7; }
     .editor a { color:#7ab; text-decoration:underline; cursor:pointer; }
     .panel [hidden] { display:none !important; }
+    /* Champ « identifiant » invisible, là seulement pour que le gestionnaire de mots de passe reconnaisse le formulaire.
+       Il ne doit ni prendre de place ni recevoir de toucher : sinon il recouvre le champ du mot de passe (pas de saisie ni de collage sur téléphone). */
+    .panel form { position:relative; }
+    .panel input.autofill-user { position:absolute !important; left:0; top:0; width:1px !important; height:1px !important; min-width:0 !important; padding:0 !important; border:0 !important; margin:0 !important; opacity:0; pointer-events:none !important; flex:none !important; }
     .link-bar, .link-box { background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; }
     .link-bar { flex-direction:row; flex-wrap:wrap; align-items:center; }
     .link-bar .link-target { flex:1; min-width:120px; font-size:13px; color:#9bd; word-break:break-all; }
@@ -85,7 +89,7 @@
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
     const punkView = document.getElementById('view-punk');
-    const APP_VERSION = 'v6'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
+    const APP_VERSION = 'v7'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -211,7 +215,7 @@ if (urlParams.get('fichier')) {
         <div class="panel">
           <h2>Scriptum</h2>
           <form id="s-unlock-form" class="row" autocomplete="on">
-            <input type="text" id="s-unlock-user" name="username" value="cerflak" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;">
+            <input type="text" id="s-unlock-user" name="username" value="cerflak" autocomplete="username" tabindex="-1" aria-hidden="true" class="autofill-user">
             <input type="password" id="s-unlock-pass" name="password" placeholder="Mot de passe" autocomplete="current-password">
             <button type="submit" id="s-unlock-btn">Déverrouiller</button>
           </form>
