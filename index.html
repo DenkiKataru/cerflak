@@ -41,6 +41,12 @@
     .tb-select { background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:6px; padding:6px 8px; font-family:monospace; }
     .editor { width:100%; min-height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:Georgia,'Gelasio',serif; font-size:11pt; box-sizing:border-box; overflow-y:auto; }
     .editor:focus { outline:1px solid #4a7; }
+    .editor a { color:#7ab; text-decoration:underline; cursor:pointer; }
+    .panel [hidden] { display:none !important; }
+    .link-bar, .link-box { background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+    .link-bar { flex-direction:row; flex-wrap:wrap; align-items:center; }
+    .link-bar .link-target { flex:1; min-width:120px; font-size:13px; color:#9bd; word-break:break-all; }
+    .link-files button { display:block; width:100%; text-align:left; margin-bottom:6px; }
     .editor:empty:before { content: attr(data-placeholder); color:#666; }
   </style>
 </head>
@@ -65,6 +71,7 @@
   </div>
 
   <script src="scriptum.js"></script>
+  <script src="liens.js"></script>
   <script>
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
@@ -358,6 +365,39 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
               <option value="20">20</option>
               <option value="24">24</option>
             </select>
+            <div class="tb-sep"></div>
+            <button type="button" class="tb-btn" id="btn-link" title="Lien : relier le texte sélectionné à une adresse ou à un autre fichier">🔗</button>
+          </div>
+          <div class="link-bar" id="link-bar" hidden>
+            <span class="link-target" id="lb-target"></span>
+            <button type="button" id="lb-open">Ouvrir</button>
+            <button type="button" id="lb-edit">Modifier</button>
+            <button type="button" id="lb-remove">Retirer</button>
+            <button type="button" id="lb-close" title="Fermer">×</button>
+          </div>
+          <div class="link-box" id="link-box" hidden>
+            <div class="row">
+              <label><input type="radio" name="lk-kind" value="url" checked> Adresse web (YouTube, etc.)</label>
+              <label><input type="radio" name="lk-kind" value="gtext"> Autre fichier gtext</label>
+            </div>
+            <div class="row" id="lk-url-row">
+              <input type="text" id="lk-url" placeholder="https://www.youtube.com/..." inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
+            </div>
+            <div id="lk-gtext-row" hidden>
+              <div class="row">
+                <input type="text" id="lk-subfolder" placeholder="Sous-dossier (ex: Plumaisons)" autocomplete="off">
+                <button type="button" id="lk-list">Lister</button>
+              </div>
+              <div class="link-files" id="lk-files"></div>
+              <div class="row">
+                <input type="text" id="lk-filename" placeholder="Nom du fichier (ex: poeme1.gtext)" autocomplete="off">
+              </div>
+            </div>
+            <div class="row">
+              <button type="button" id="lk-ok">Valider</button>
+              <button type="button" id="lk-cancel">Annuler</button>
+            </div>
+            <div class="status" id="lk-status"></div>
           </div>
           <div id="s-text" class="editor" contenteditable="true" data-placeholder="Écris ici..."></div>
           <div class="row">
@@ -439,6 +479,169 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         const sel = window.getSelection();
         if (document.activeElement === editor || (sel.anchorNode && editor.contains(sel.anchorNode))) {
           updateToolbarState();
+          rememberSelection();
+        }
+      });
+
+      // --- Liens : texte sélectionné -> adresse web ou autre gtext ---
+      const L = window.CerflakLinks;
+      const linkBar = document.getElementById('link-bar');
+      const linkBox = document.getElementById('link-box');
+      const lkStatus = document.getElementById('lk-status');
+      const lkUrl = document.getElementById('lk-url');
+      const lkSubfolder = document.getElementById('lk-subfolder');
+      const lkFilename = document.getElementById('lk-filename');
+      const lkFiles = document.getElementById('lk-files');
+      let activeLink = null; // le lien affiché dans la barre ou en cours de modification
+      let linkMode = 'new';  // 'new' (sur la sélection) ou 'edit' (lien existant)
+
+      // Retient la sélection pour la retrouver quand on touche le bouton (le téléphone la perd parfois)
+      function rememberSelection() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return;
+        const r = sel.getRangeAt(0);
+        if (!r.collapsed || document.activeElement === editor) savedRange = r.cloneRange();
+      }
+      function closestLink(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        const a = el && el.closest ? el.closest('a') : null;
+        return a && editor.contains(a) ? a : null;
+      }
+      function notifyChange() {
+        editor.dispatchEvent(new Event('input', { bubbles: true })); // le texte a changé : à rechiffrer
+      }
+      function describeTarget(a) {
+        const t = L.parseLinkTarget(a.getAttribute('href'));
+        if (!t) return 'Lien non valide';
+        return t.kind === 'gtext' ? `Fichier : ${t.subfolder ? t.subfolder + '/' : ''}${t.filename}` : t.href;
+      }
+      function hideLinkBar() { linkBar.hidden = true; if (linkMode !== 'edit' || linkBox.hidden) activeLink = null; }
+      function showLinkBar(a) {
+        activeLink = a;
+        linkBox.hidden = true;
+        document.getElementById('lb-target').textContent = describeTarget(a);
+        linkBar.hidden = false;
+      }
+      function setLinkKind(kind) {
+        linkBox.querySelector(`input[name="lk-kind"][value="${kind}"]`).checked = true;
+        document.getElementById('lk-url-row').hidden = kind !== 'url';
+        document.getElementById('lk-gtext-row').hidden = kind !== 'gtext';
+      }
+      function openLinkBox(mode, a) {
+        linkMode = mode;
+        activeLink = a;
+        linkBar.hidden = true;
+        lkStatus.textContent = '';
+        lkFiles.innerHTML = '';
+        lkUrl.value = lkSubfolder.value = lkFilename.value = '';
+        setLinkKind('url');
+        const t = a && L.parseLinkTarget(a.getAttribute('href'));
+        if (t && t.kind === 'url') lkUrl.value = t.href;
+        if (t && t.kind === 'gtext') {
+          setLinkKind('gtext');
+          lkSubfolder.value = t.subfolder;
+          lkFilename.value = t.filename;
+        }
+        linkBox.hidden = false;
+        (t && t.kind === 'gtext' ? lkFilename : lkUrl).focus();
+      }
+      function closeLinkBox() { linkBox.hidden = true; activeLink = null; }
+
+      document.getElementById('btn-link').addEventListener('mousedown', (e) => e.preventDefault()); // garde la sélection (souris)
+      document.getElementById('btn-link').addEventListener('click', () => {
+        rememberSelection();
+        const inLink = savedRange && closestLink(savedRange.commonAncestorContainer);
+        if (inLink) { openLinkBox('edit', inLink); return; }
+        if (!savedRange || savedRange.collapsed) {
+          statusEl.textContent = 'Sélectionne d\'abord le texte à relier, puis touche 🔗.';
+          return;
+        }
+        statusEl.textContent = '';
+        openLinkBox('new', null);
+      });
+      linkBox.querySelectorAll('input[name="lk-kind"]').forEach((r) => r.addEventListener('change', () => setLinkKind(r.value)));
+
+      document.getElementById('lk-list').addEventListener('click', async () => {
+        const sub = lkSubfolder.value.trim() || 'Divers';
+        lkStatus.textContent = 'Chargement...';
+        lkFiles.innerHTML = '';
+        try {
+          const resp = await fetch(`${KURA_API_BASE}/list?subfolder=${encodeURIComponent(sub)}`, { headers: { 'X-Api-Secret': apiToken } });
+          if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
+          const data = await resp.json();
+          let names = data.files || [];
+          if (names.some((n) => /\.gtext$/i.test(n))) names = names.filter((n) => /\.gtext$/i.test(n));
+          if (names.length === 0) { lkStatus.textContent = 'Aucun fichier dans ce sous-dossier.'; return; }
+          lkStatus.textContent = '';
+          names.forEach((name) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = name;
+            b.addEventListener('click', () => { lkSubfolder.value = sub; lkFilename.value = name; lkFiles.innerHTML = ''; });
+            lkFiles.appendChild(b);
+          });
+        } catch (e) {
+          lkStatus.textContent = 'Erreur : ' + e.message;
+        }
+      });
+
+      document.getElementById('lk-ok').addEventListener('click', () => {
+        const kind = linkBox.querySelector('input[name="lk-kind"]:checked').value;
+        let href;
+        if (kind === 'url') {
+          href = L.normalizeWebUrl(lkUrl.value);
+          if (!href) { lkStatus.textContent = 'Adresse non valide. Exemple : https://www.youtube.com/watch?v=...'; return; }
+        } else {
+          href = L.buildGtextLink(lkSubfolder.value, lkFilename.value);
+          if (!href) { lkStatus.textContent = 'Indique le nom du fichier.'; return; }
+        }
+        if (linkMode === 'edit' && activeLink) {
+          activeLink.setAttribute('href', href);
+        } else {
+          if (!savedRange || savedRange.collapsed) { lkStatus.textContent = 'La sélection a été perdue : sélectionne le texte à nouveau.'; return; }
+          editor.focus();
+          restoreSelection();
+          document.execCommand('createLink', false, href);
+        }
+        notifyChange();
+        closeLinkBox();
+        statusEl.textContent = 'Lien enregistré dans le texte. Rechiffre le texte pour le garder.';
+      });
+      document.getElementById('lk-cancel').addEventListener('click', closeLinkBox);
+
+      // Toucher un lien dans le texte : petite barre Ouvrir / Modifier / Retirer (le lien ne s'ouvre jamais tout seul)
+      editor.addEventListener('click', (e) => {
+        const a = closestLink(e.target);
+        if (a) { e.preventDefault(); showLinkBar(a); } else { hideLinkBar(); }
+      });
+      document.getElementById('lb-close').addEventListener('click', () => { linkBar.hidden = true; activeLink = null; });
+      document.getElementById('lb-edit').addEventListener('click', () => { if (activeLink) openLinkBox('edit', activeLink); });
+      document.getElementById('lb-remove').addEventListener('click', () => {
+        const a = activeLink;
+        if (!a) return;
+        const parent = a.parentNode;
+        while (a.firstChild) parent.insertBefore(a.firstChild, a);
+        a.remove();
+        parent.normalize();
+        linkBar.hidden = true;
+        activeLink = null;
+        notifyChange();
+        statusEl.textContent = 'Lien retiré (le texte est conservé).';
+      });
+      document.getElementById('lb-open').addEventListener('click', async () => {
+        const t = activeLink && L.parseLinkTarget(activeLink.getAttribute('href'));
+        if (!t) { statusEl.textContent = 'Lien non valide.'; return; }
+        if (t.kind === 'url') {
+          window.open(t.href, '_blank', 'noopener,noreferrer'); // seules les adresses http/https passent
+          return;
+        }
+        const hasUnsaved = editor.innerText.trim() !== '' && editor.innerHTML !== lastSavedHtml;
+        if (hasUnsaved && !confirm('Ton texte actuel n\'est pas enregistré sur Kura. L\'ouvrir remplacera le texte affiché. Continuer ?')) return;
+        statusEl.textContent = 'Ouverture...';
+        try {
+          await openGtextInEditor(t.subfolder || 'Divers', t.filename);
+        } catch (e) {
+          statusEl.textContent = 'Erreur : ' + e.message;
         }
       });
 
@@ -504,6 +707,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
             body: JSON.stringify({ subfolder, filename, content: currentJsonContent }),
           });
           if (!saveResp.ok) throw new Error(`Échec envoi (${saveResp.status})`);
+          lastSavedHtml = editor.innerHTML;
           statusEl.textContent = `Enregistré sur Kura : ${subfolder}/${filename}.gtext`;
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
@@ -548,6 +752,30 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       } catch (e) {
         statusElLocal.textContent = 'Erreur : ' + e.message;
       }
+    }
+
+    // Contenu de l'éditeur au dernier enregistrement sur Kura ou à la dernière ouverture (pour ne pas écraser un texte non enregistré)
+    let lastSavedHtml = null;
+
+    // Charge un fichier gtext depuis Kura, le déchiffre et l'affiche dans l'éditeur (ouverture par la liste, par lien direct ou par un lien du texte)
+    async function openGtextInEditor(subfolder, filename) {
+      const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
+        headers: { 'X-Api-Secret': apiToken },
+      });
+      if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
+      const data = await resp.json();
+      const gtextObject = JSON.parse(data.content);
+      const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
+      currentGtext = gtextObject;
+      currentJsonContent = data.content;
+      renderEditor();
+      const editorEl = document.getElementById('s-text');
+      editorEl.innerHTML = html;
+      lastSavedHtml = editorEl.innerHTML;
+      document.getElementById('s-subfolder').value = subfolder;
+      document.getElementById('s-filename').value = filename;
+      document.getElementById('s-ots').disabled = false;
+      document.getElementById('s-save').disabled = false;
     }
 
     function renderOpenScreen() {
@@ -600,21 +828,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       async function openFile(subfolder, filename) {
         statusEl.textContent = 'Ouverture...';
         try {
-          const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
-            headers: { 'X-Api-Secret': apiToken },
-          });
-          if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
-          const data = await resp.json();
-          const gtextObject = JSON.parse(data.content);
-          const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
-          currentGtext = gtextObject;
-          currentJsonContent = data.content;
-          renderEditor();
-          document.getElementById('s-text').innerHTML = html;
-          document.getElementById('s-subfolder').value = subfolder;
-          document.getElementById('s-filename').value = filename;
-          document.getElementById('s-ots').disabled = false;
-          document.getElementById('s-save').disabled = false;
+          await openGtextInEditor(subfolder, filename);
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
         }
