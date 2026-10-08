@@ -1,9 +1,10 @@
-const CACHE_NAME = 'cerflak-shell-v4';
-const SHELL_FILES = ['./index.html', './scriptum.js', './manifest.webmanifest', './fonts/Gelasio-latin.woff2', './fonts/Gelasio-Italic-latin.woff2'];
+const CACHE_NAME = 'cerflak-shell-v6';
+const SHELL_FILES = ['./index.html', './scriptum.js', './liens.js', './manifest.webmanifest', './fonts/Gelasio-latin.woff2', './fonts/Gelasio-Italic-latin.woff2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
+    // cache:'reload' : on prend toujours la version fraîche du serveur, jamais une copie gardée par le navigateur
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES.map((f) => new Request(f, { cache: 'reload' }))))
   );
   self.skipWaiting();
 });

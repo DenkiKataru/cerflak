@@ -11,6 +11,10 @@
     @font-face { font-family:'Gelasio'; font-style:italic; font-weight:400 700; font-display:swap; src:url('fonts/Gelasio-Italic-latin.woff2') format('woff2'); }
     body { margin:0; font-family: -apple-system, sans-serif; background:#111; color:#eee; height:100dvh; display:flex; }
     nav { width:64px; background:#1c1c1c; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:14px; }
+    nav .nav-foot { margin-top:auto; padding-bottom:12px; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:10px; color:#777; }
+    nav .nav-foot button { background:#333; color:#eee; border:1px solid #444; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:16px; }
+    #toast { position:fixed; left:76px; right:12px; bottom:12px; background:#222; color:#eee; border:1px solid #4a7; border-radius:8px; padding:10px 12px; font-size:13px; z-index:10; }
+    #toast[hidden] { display:none; }
     nav .tab { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; width:100%; font-size:9px; color:#aaa; text-align:center; -webkit-tap-highlight-color:transparent; }
     nav .tab.active { color:#eee; }
     nav .tab.active .icon { background:#4a7; }
@@ -41,6 +45,12 @@
     .tb-select { background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:6px; padding:6px 8px; font-family:monospace; }
     .editor { width:100%; min-height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:Georgia,'Gelasio',serif; font-size:11pt; box-sizing:border-box; overflow-y:auto; }
     .editor:focus { outline:1px solid #4a7; }
+    .editor a { color:#7ab; text-decoration:underline; cursor:pointer; }
+    .panel [hidden] { display:none !important; }
+    .link-bar, .link-box { background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+    .link-bar { flex-direction:row; flex-wrap:wrap; align-items:center; }
+    .link-bar .link-target { flex:1; min-width:120px; font-size:13px; color:#9bd; word-break:break-all; }
+    .link-files button { display:block; width:100%; text-align:left; margin-bottom:6px; }
     .editor:empty:before { content: attr(data-placeholder); color:#666; }
   </style>
 </head>
@@ -50,7 +60,12 @@
     <div class="tab" id="nav-punkrecords" data-tab="punk" title="Punk Records"><div class="icon">P</div><span>Punk Records</span></div>
     <div class="tab" id="nav-dedale" data-tab="dedale" title="Dédale"><div class="icon">D</div><span>Dédale</span></div>
     <div class="tab" id="nav-copmonk" data-tab="copmonk" title="CopMonk"><div class="icon">C</div><span>CopMonk</span></div>
+    <div class="nav-foot">
+      <button type="button" id="btn-update" title="Mettre à jour l'appli (sans effacer tes données)">↻</button>
+      <span id="app-version"></span>
+    </div>
   </nav>
+  <div id="toast" hidden></div>
   <div id="views">
     <!-- Chaque onglet a sa propre zone, masquée mais jamais détruite : le travail en cours survit au changement d'onglet -->
     <main class="view" id="view-gate"><div class="welcome"><h1>Cerflak</h1></div></main>
@@ -65,10 +80,12 @@
   </div>
 
   <script src="scriptum.js"></script>
+  <script src="liens.js"></script>
   <script>
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
     const punkView = document.getElementById('view-punk');
+    const APP_VERSION = 'v6'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -358,6 +375,39 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
               <option value="20">20</option>
               <option value="24">24</option>
             </select>
+            <div class="tb-sep"></div>
+            <button type="button" class="tb-btn" id="btn-link" title="Lien : relier le texte sélectionné à une adresse ou à un autre fichier">🔗</button>
+          </div>
+          <div class="link-bar" id="link-bar" hidden>
+            <span class="link-target" id="lb-target"></span>
+            <button type="button" id="lb-open">Ouvrir</button>
+            <button type="button" id="lb-edit">Modifier</button>
+            <button type="button" id="lb-remove">Retirer</button>
+            <button type="button" id="lb-close" title="Fermer">×</button>
+          </div>
+          <div class="link-box" id="link-box" hidden>
+            <div class="row">
+              <label><input type="radio" name="lk-kind" value="url" checked> Adresse web (YouTube, etc.)</label>
+              <label><input type="radio" name="lk-kind" value="gtext"> Autre fichier gtext</label>
+            </div>
+            <div class="row" id="lk-url-row">
+              <input type="text" id="lk-url" placeholder="https://www.youtube.com/..." inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
+            </div>
+            <div id="lk-gtext-row" hidden>
+              <div class="row">
+                <input type="text" id="lk-subfolder" placeholder="Sous-dossier (ex: Plumaisons)" autocomplete="off">
+                <button type="button" id="lk-list">Lister</button>
+              </div>
+              <div class="link-files" id="lk-files"></div>
+              <div class="row">
+                <input type="text" id="lk-filename" placeholder="Nom du fichier (ex: poeme1.gtext)" autocomplete="off">
+              </div>
+            </div>
+            <div class="row">
+              <button type="button" id="lk-ok">Valider</button>
+              <button type="button" id="lk-cancel">Annuler</button>
+            </div>
+            <div class="status" id="lk-status"></div>
           </div>
           <div id="s-text" class="editor" contenteditable="true" data-placeholder="Écris ici..."></div>
           <div class="row">
@@ -439,6 +489,169 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         const sel = window.getSelection();
         if (document.activeElement === editor || (sel.anchorNode && editor.contains(sel.anchorNode))) {
           updateToolbarState();
+          rememberSelection();
+        }
+      });
+
+      // --- Liens : texte sélectionné -> adresse web ou autre gtext ---
+      const L = window.CerflakLinks;
+      const linkBar = document.getElementById('link-bar');
+      const linkBox = document.getElementById('link-box');
+      const lkStatus = document.getElementById('lk-status');
+      const lkUrl = document.getElementById('lk-url');
+      const lkSubfolder = document.getElementById('lk-subfolder');
+      const lkFilename = document.getElementById('lk-filename');
+      const lkFiles = document.getElementById('lk-files');
+      let activeLink = null; // le lien affiché dans la barre ou en cours de modification
+      let linkMode = 'new';  // 'new' (sur la sélection) ou 'edit' (lien existant)
+
+      // Retient la sélection pour la retrouver quand on touche le bouton (le téléphone la perd parfois)
+      function rememberSelection() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return;
+        const r = sel.getRangeAt(0);
+        if (!r.collapsed || document.activeElement === editor) savedRange = r.cloneRange();
+      }
+      function closestLink(node) {
+        const el = node && (node.nodeType === 1 ? node : node.parentElement);
+        const a = el && el.closest ? el.closest('a') : null;
+        return a && editor.contains(a) ? a : null;
+      }
+      function notifyChange() {
+        editor.dispatchEvent(new Event('input', { bubbles: true })); // le texte a changé : à rechiffrer
+      }
+      function describeTarget(a) {
+        const t = L.parseLinkTarget(a.getAttribute('href'));
+        if (!t) return 'Lien non valide';
+        return t.kind === 'gtext' ? `Fichier : ${t.subfolder ? t.subfolder + '/' : ''}${t.filename}` : t.href;
+      }
+      function hideLinkBar() { linkBar.hidden = true; if (linkMode !== 'edit' || linkBox.hidden) activeLink = null; }
+      function showLinkBar(a) {
+        activeLink = a;
+        linkBox.hidden = true;
+        document.getElementById('lb-target').textContent = describeTarget(a);
+        linkBar.hidden = false;
+      }
+      function setLinkKind(kind) {
+        linkBox.querySelector(`input[name="lk-kind"][value="${kind}"]`).checked = true;
+        document.getElementById('lk-url-row').hidden = kind !== 'url';
+        document.getElementById('lk-gtext-row').hidden = kind !== 'gtext';
+      }
+      function openLinkBox(mode, a) {
+        linkMode = mode;
+        activeLink = a;
+        linkBar.hidden = true;
+        lkStatus.textContent = '';
+        lkFiles.innerHTML = '';
+        lkUrl.value = lkSubfolder.value = lkFilename.value = '';
+        setLinkKind('url');
+        const t = a && L.parseLinkTarget(a.getAttribute('href'));
+        if (t && t.kind === 'url') lkUrl.value = t.href;
+        if (t && t.kind === 'gtext') {
+          setLinkKind('gtext');
+          lkSubfolder.value = t.subfolder;
+          lkFilename.value = t.filename;
+        }
+        linkBox.hidden = false;
+        (t && t.kind === 'gtext' ? lkFilename : lkUrl).focus();
+      }
+      function closeLinkBox() { linkBox.hidden = true; activeLink = null; }
+
+      document.getElementById('btn-link').addEventListener('mousedown', (e) => e.preventDefault()); // garde la sélection (souris)
+      document.getElementById('btn-link').addEventListener('click', () => {
+        rememberSelection();
+        const inLink = savedRange && closestLink(savedRange.commonAncestorContainer);
+        if (inLink) { openLinkBox('edit', inLink); return; }
+        if (!savedRange || savedRange.collapsed) {
+          statusEl.textContent = 'Sélectionne d\'abord le texte à relier, puis touche 🔗.';
+          return;
+        }
+        statusEl.textContent = '';
+        openLinkBox('new', null);
+      });
+      linkBox.querySelectorAll('input[name="lk-kind"]').forEach((r) => r.addEventListener('change', () => setLinkKind(r.value)));
+
+      document.getElementById('lk-list').addEventListener('click', async () => {
+        const sub = lkSubfolder.value.trim() || 'Divers';
+        lkStatus.textContent = 'Chargement...';
+        lkFiles.innerHTML = '';
+        try {
+          const resp = await fetch(`${KURA_API_BASE}/list?subfolder=${encodeURIComponent(sub)}`, { headers: { 'X-Api-Secret': apiToken } });
+          if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
+          const data = await resp.json();
+          let names = data.files || [];
+          if (names.some((n) => /\.gtext$/i.test(n))) names = names.filter((n) => /\.gtext$/i.test(n));
+          if (names.length === 0) { lkStatus.textContent = 'Aucun fichier dans ce sous-dossier.'; return; }
+          lkStatus.textContent = '';
+          names.forEach((name) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = name;
+            b.addEventListener('click', () => { lkSubfolder.value = sub; lkFilename.value = name; lkFiles.innerHTML = ''; });
+            lkFiles.appendChild(b);
+          });
+        } catch (e) {
+          lkStatus.textContent = 'Erreur : ' + e.message;
+        }
+      });
+
+      document.getElementById('lk-ok').addEventListener('click', () => {
+        const kind = linkBox.querySelector('input[name="lk-kind"]:checked').value;
+        let href;
+        if (kind === 'url') {
+          href = L.normalizeWebUrl(lkUrl.value);
+          if (!href) { lkStatus.textContent = 'Adresse non valide. Exemple : https://www.youtube.com/watch?v=...'; return; }
+        } else {
+          href = L.buildGtextLink(lkSubfolder.value, lkFilename.value);
+          if (!href) { lkStatus.textContent = 'Indique le nom du fichier.'; return; }
+        }
+        if (linkMode === 'edit' && activeLink) {
+          activeLink.setAttribute('href', href);
+        } else {
+          if (!savedRange || savedRange.collapsed) { lkStatus.textContent = 'La sélection a été perdue : sélectionne le texte à nouveau.'; return; }
+          editor.focus();
+          restoreSelection();
+          document.execCommand('createLink', false, href);
+        }
+        notifyChange();
+        closeLinkBox();
+        statusEl.textContent = 'Lien enregistré dans le texte. Rechiffre le texte pour le garder.';
+      });
+      document.getElementById('lk-cancel').addEventListener('click', closeLinkBox);
+
+      // Toucher un lien dans le texte : petite barre Ouvrir / Modifier / Retirer (le lien ne s'ouvre jamais tout seul)
+      editor.addEventListener('click', (e) => {
+        const a = closestLink(e.target);
+        if (a) { e.preventDefault(); showLinkBar(a); } else { hideLinkBar(); }
+      });
+      document.getElementById('lb-close').addEventListener('click', () => { linkBar.hidden = true; activeLink = null; });
+      document.getElementById('lb-edit').addEventListener('click', () => { if (activeLink) openLinkBox('edit', activeLink); });
+      document.getElementById('lb-remove').addEventListener('click', () => {
+        const a = activeLink;
+        if (!a) return;
+        const parent = a.parentNode;
+        while (a.firstChild) parent.insertBefore(a.firstChild, a);
+        a.remove();
+        parent.normalize();
+        linkBar.hidden = true;
+        activeLink = null;
+        notifyChange();
+        statusEl.textContent = 'Lien retiré (le texte est conservé).';
+      });
+      document.getElementById('lb-open').addEventListener('click', async () => {
+        const t = activeLink && L.parseLinkTarget(activeLink.getAttribute('href'));
+        if (!t) { statusEl.textContent = 'Lien non valide.'; return; }
+        if (t.kind === 'url') {
+          window.open(t.href, '_blank', 'noopener,noreferrer'); // seules les adresses http/https passent
+          return;
+        }
+        const hasUnsaved = editor.innerText.trim() !== '' && editor.innerHTML !== lastSavedHtml;
+        if (hasUnsaved && !confirm('Ton texte actuel n\'est pas enregistré sur Kura. L\'ouvrir remplacera le texte affiché. Continuer ?')) return;
+        statusEl.textContent = 'Ouverture...';
+        try {
+          await openGtextInEditor(t.subfolder || 'Divers', t.filename);
+        } catch (e) {
+          statusEl.textContent = 'Erreur : ' + e.message;
         }
       });
 
@@ -504,6 +717,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
             body: JSON.stringify({ subfolder, filename, content: currentJsonContent }),
           });
           if (!saveResp.ok) throw new Error(`Échec envoi (${saveResp.status})`);
+          lastSavedHtml = editor.innerHTML;
           statusEl.textContent = `Enregistré sur Kura : ${subfolder}/${filename}.gtext`;
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
@@ -548,6 +762,30 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       } catch (e) {
         statusElLocal.textContent = 'Erreur : ' + e.message;
       }
+    }
+
+    // Contenu de l'éditeur au dernier enregistrement sur Kura ou à la dernière ouverture (pour ne pas écraser un texte non enregistré)
+    let lastSavedHtml = null;
+
+    // Charge un fichier gtext depuis Kura, le déchiffre et l'affiche dans l'éditeur (ouverture par la liste, par lien direct ou par un lien du texte)
+    async function openGtextInEditor(subfolder, filename) {
+      const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
+        headers: { 'X-Api-Secret': apiToken },
+      });
+      if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
+      const data = await resp.json();
+      const gtextObject = JSON.parse(data.content);
+      const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
+      currentGtext = gtextObject;
+      currentJsonContent = data.content;
+      renderEditor();
+      const editorEl = document.getElementById('s-text');
+      editorEl.innerHTML = html;
+      lastSavedHtml = editorEl.innerHTML;
+      document.getElementById('s-subfolder').value = subfolder;
+      document.getElementById('s-filename').value = filename;
+      document.getElementById('s-ots').disabled = false;
+      document.getElementById('s-save').disabled = false;
     }
 
     function renderOpenScreen() {
@@ -600,21 +838,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       async function openFile(subfolder, filename) {
         statusEl.textContent = 'Ouverture...';
         try {
-          const resp = await fetch(`${KURA_API_BASE}/file?subfolder=${encodeURIComponent(subfolder)}&filename=${encodeURIComponent(filename)}`, {
-            headers: { 'X-Api-Secret': apiToken },
-          });
-          if (!resp.ok) throw new Error(`Échec de l'ouverture (${resp.status})`);
-          const data = await resp.json();
-          const gtextObject = JSON.parse(data.content);
-          const html = await Scriptum.decryptWithKey(gtextObject, currentCryptoKey);
-          currentGtext = gtextObject;
-          currentJsonContent = data.content;
-          renderEditor();
-          document.getElementById('s-text').innerHTML = html;
-          document.getElementById('s-subfolder').value = subfolder;
-          document.getElementById('s-filename').value = filename;
-          document.getElementById('s-ots').disabled = false;
-          document.getElementById('s-save').disabled = false;
+          await openGtextInEditor(subfolder, filename);
         } catch (e) {
           statusEl.textContent = 'Erreur : ' + e.message;
         }
@@ -840,6 +1064,7 @@ if (pendingOpenParams) {
 
     // Après un déverrouillage réussi (clé + jeton en mémoire) : on va à l'onglet demandé
     function finishUnlock() {
+      requestPersistentStorage(); // demande au navigateur de ne pas effacer les données de l'appli
       const name = pendingTab || 'scriptum';
       pendingTab = null;
       if (pendingOpenParams) { // lien direct ?dossier=...&fichier=... : ouverture dans Scriptum
@@ -865,8 +1090,61 @@ if (pendingOpenParams) {
 
     document.querySelectorAll('nav .tab').forEach(t => t.addEventListener('click', () => goToTab(t.dataset.tab)));
 
+    // --- Version, stockage durable et mise à jour sans effacer les données ---
+    document.getElementById('app-version').textContent = APP_VERSION;
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function toast(msg, ms = 7000) {
+      toastEl.textContent = msg;
+      toastEl.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms);
+    }
+    async function requestPersistentStorage() {
+      try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) { /* pas grave */ }
+    }
+    async function storageState() {
+      try { if (navigator.storage && navigator.storage.persisted) return (await navigator.storage.persisted()) ? 'protégées' : 'non protégées'; } catch (e) { /* inconnu */ }
+      return 'inconnu';
+    }
+    function parseSwVersion(text) {
+      const m = /CACHE_NAME\s*=\s*'cerflak-shell-([^']+)'/.exec(text);
+      return m ? m[1] : null;
+    }
+    async function checkForUpdate() {
+      toast('Recherche de mise à jour...');
+      try {
+        const latest = parseSwVersion(await (await fetch('sw.js', { cache: 'no-store' })).text());
+        if (!latest || latest === APP_VERSION) {
+          await requestPersistentStorage();
+          toast(`À jour (${APP_VERSION}). Données de l'appli : ${await storageState()}.`);
+          return;
+        }
+        const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+        if (reg) {
+          await reg.update();
+          // on attend que la nouvelle version soit prête : son cache existe et l'ancien a disparu
+          let ready = false;
+          for (let i = 0; i < 40 && !ready; i++) {
+            ready = (await caches.has('cerflak-shell-' + latest)) && !(await caches.has('cerflak-shell-' + APP_VERSION));
+            if (!ready) await new Promise((r) => setTimeout(r, 500));
+          }
+          if (!ready) { toast('La nouvelle version n\'a pas pu être préparée. Réessaie dans un instant.'); return; }
+        }
+        if (confirm(`La version ${latest} est prête (tu utilises la ${APP_VERSION}). Recharger maintenant ? Le texte non enregistré sera perdu et le mot de passe sera redemandé.`)) {
+          location.reload();
+        } else {
+          toast(`Version ${latest} prête : elle s'affichera au prochain démarrage.`);
+        }
+      } catch (e) {
+        toast('Mise à jour impossible (connexion ?) : ' + e.message);
+      }
+    }
+    document.getElementById('btn-update').addEventListener('click', checkForUpdate);
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // updateViaCache:'none' : le navigateur ne réutilise jamais une copie périmée de sw.js
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     }
   </script>
 </body>
