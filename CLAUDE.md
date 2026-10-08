@@ -1,6 +1,6 @@
 # Cerflak : contexte du projet
 
-Cerflak est une application d'écriture et d'archivage unifiée, développée par un auteur indépendant (non développeur de métier). Elle tient dans **une seule application à trois onglets** : Scriptum (éditeur chiffré), Punk Records (fichiers + rimes) et CopMonk (archivage d'articles web, version améliorée d'Archiveur). L'onglet Dédale (mind mapping) a été abandonné : les liens de Scriptum vers les fichiers de Punk Records le remplacent.
+Cerflak est une application d'écriture et d'archivage unifiée, développée par un auteur indépendant (non développeur de métier). Elle tient dans **une seule application à deux onglets** : Scriptum (éditeur chiffré) et Punk Records (fichiers + rimes). Les onglets Dédale (mind mapping) et CopMonk (archivage d'articles web) ont été abandonnés : les liens de Scriptum (adresse web, autre gtext, fichier de Punk Records) les remplacent. Les articles web se gardent sous forme de simples liens dans un fichier Scriptum.
 
 ## Règles de collaboration
 
@@ -18,13 +18,13 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 
 - Deux cibles seulement : Honor Magic 7 (Android) et Mac. Pas de Windows.
 - Une seule PWA (HTML/JS), hébergée sur GitHub Pages, dépôt `DenkiKataru/cerflak`, URL `https://denkikataru.github.io/cerflak/`.
-- Interface en **trois onglets** : Scriptum, Punk Records, CopMonk. Une seule base de code, une seule navigation. La clé de chiffrement déverrouillée reste en mémoire le temps de la session et sert à tous les onglets (pas de nouveau mot de passe en changeant d'onglet). Charger les onglets lourds à la demande pour garder un démarrage rapide.
+- Interface en **deux onglets** : Scriptum, Punk Records. Une seule base de code, une seule navigation. La clé de chiffrement déverrouillée reste en mémoire le temps de la session et sert à tous les onglets (pas de nouveau mot de passe en changeant d'onglet). Charger les onglets lourds à la demande pour garder un démarrage rapide.
 - Capacitor est abandonné (complexité du toolchain Android). Ne pas le réintroduire sans me le demander.
 - Attention au cache du service worker : après chaque déploiement, prévoir un moyen de forcer la mise à jour de la PWA.
 
 ## Abandons définitifs (ne pas réintroduire)
 
-- Dédale (mind mapping) : onglet retiré. Ne pas le réintroduire sans me le demander.
+- Dédale (mind mapping) et CopMonk (archivage d'articles en PDF) : onglets retirés. Ne pas les réintroduire sans me le demander.
 - Synchronisation automatique et gestion de conflits de Scriptum (auto-save local, envoi périodique vers Kura, indicateur d'état) : abandonnées.
 - LanguageTool, LibreTranslate et Mother Thong : la qualité de traduction obtenue était mauvaise. Plus de module correcteur/traducteur dans Cerflak.
 - Windows / Shadow comme cible.
@@ -36,7 +36,7 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 - Routes côté serveur : `/list`, `/file` (ouverture), `/export` (LibreOffice headless, profil temporaire isolé par conversion ; PDF chiffré par mot de passe via qpdf ; l'ODT reste non chiffré volontairement).
 - Horodatage OpenTimestamps (OTS) : pipeline sur le VPS OVH, envoi du mail via Brevo, domaine `lesplumeslestees.fr` authentifié (DKIM, DMARC). Le .ots confirmé est récupéré 24 h plus tard.
 - Fichiers Punk Records sur Kura : `/volume1/Nindo/Sharingan` avec trois sous-dossiers : `PDF`, `SONS`, `VIDÉOS`.
-- Archiveur existe déjà : application web (captures d'écran → PDF) déployée sur le VPS OVH à `archiveur.garofali.fr`, avec données centralisées.
+- Archiveur existe déjà, indépendamment de Cerflak : application web (captures d'écran → PDF) déployée sur le VPS OVH à `archiveur.garofali.fr`, avec données centralisées.
 
 ## Onglet Scriptum
 
@@ -53,22 +53,13 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 ## Onglet Punk Records
 
 - Gestion de fichiers vidéo/audio/PDF avec mots-clés, et recherche par rimes : on tape un mot, l'app renvoie les fichiers dont un mot-clé rime avec lui. Niveau par défaut : rime suffisante (deux sons finaux communs).
-- Déjà fait : moteur de rimes autonome (`rimes.json`, dérivé de Lexique383, sur le dépôt).
-- À faire : rattacher le moteur aux mots-clés des fichiers (catalogage).
-- Punk Records reçoit aussi les articles archivés par CopMonk (PDF).
-
-## Onglet CopMonk (version améliorée d'Archiveur)
-
-- Reprend la fonction d'Archiveur (captures d'écran → PDF) et ajoute l'enregistrement d'articles vus sur le web, façon Pocket : garder l'article avec titre, source et date, lisible plus tard, et le sauvegarder en **PDF** pour le stocker dans Punk Records (dossier PDF de `/volume1/Nindo/Sharingan`).
-- À cadrer dans le plan : comment capturer un article depuis le téléphone ou le Mac (partage Android, bookmarklet, coller une URL), extraction du contenu lisible côté VPS, génération du PDF, et sa mise en place dans Punk Records avec des mots-clés.
-- Données centralisées sur Kura via le VPS, comme le reste.
+- Fait : moteur de rimes (`rimes.json`, dérivé de Lexique383, sur le dépôt), rattaché aux mots-clés des fichiers : la recherche par rime compare les deux sons finaux. Limite connue : un mot-clé composé de plusieurs mots ou absent du dictionnaire n'est pas pris en compte (utiliser des mots simples).
 
 ## Feuille de route (dans cet ordre)
 
 0. Test WebAuthn : fait (page jetable hors de l'app principale).
-1. Coquille à onglets avec clé et jeton partagés en mémoire : faite (trois onglets).
+1. Coquille à onglets avec clé et jeton partagés en mémoire : faite (deux onglets).
 2. Finir Scriptum : Georgia avec Gelasio en secours : fait (import docx / odt / pdf, PDF chiffré dans Horodater et synchronisation automatique abandonnés).
-3. Liens dans le texte de Scriptum : faits (adresse web, autre gtext, fichier de Punk Records). Reste à ajouter les articles CopMonk comme cibles quand CopMonk existera.
-4. Punk Records : catalogage par mots-clés (rattacher le moteur de rimes aux mots-clés des fichiers).
-5. CopMonk : archivage d'articles web en PDF vers Punk Records.
-6. Surveillance (ping) de Kura : à reprendre plus tard si je le redemande.
+3. Liens dans le texte de Scriptum : faits (adresse web, autre gtext, fichier de Punk Records).
+4. Punk Records : catalogage par mots-clés et recherche par rimes : fait.
+5. Application considérée comme achevée. Option laissée de côté : surveillance (ping) de Kura, à reprendre seulement si je le redemande.
