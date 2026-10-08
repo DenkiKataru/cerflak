@@ -62,7 +62,6 @@
   <nav>
     <div class="tab" id="nav-scriptum" data-tab="scriptum" title="Scriptum"><div class="icon">S</div><span>Scriptum</span></div>
     <div class="tab" id="nav-punkrecords" data-tab="punk" title="Punk Records"><div class="icon">P</div><span>Punk Records</span></div>
-    <div class="tab" id="nav-copmonk" data-tab="copmonk" title="CopMonk"><div class="icon">C</div><span>CopMonk</span></div>
     <div class="nav-foot">
       <button type="button" id="btn-update" title="Mettre à jour l'appli (sans effacer tes données)">↻</button>
       <span id="app-version"></span>
@@ -74,9 +73,6 @@
     <main class="view" id="view-gate"><div class="welcome"><h1>Cerflak</h1></div></main>
     <main class="view" id="view-scriptum" hidden></main>
     <main class="view" id="view-punk" hidden></main>
-    <main class="view" id="view-copmonk" hidden>
-      <div class="panel"><h2>CopMonk</h2><p>L'archivage d'articles web arrive bientôt.</p></div>
-    </main>
   </div>
 
   <script src="scriptum.js"></script>
@@ -85,7 +81,7 @@
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
     const punkView = document.getElementById('view-punk');
-    const APP_VERSION = 'v9'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
+    const APP_VERSION = 'v10'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -1110,7 +1106,7 @@ if (pendingOpenParams) {
     }
 
     // --- Navigation : quatre onglets, un seul verrou pour toute l'appli ---
-    const TAB_VIEWS = { scriptum: scriptumView, punk: punkView, copmonk: document.getElementById('view-copmonk') };
+    const TAB_VIEWS = { scriptum: scriptumView, punk: punkView };
     const TAB_INIT = { scriptum: () => renderEditor(), punk: () => renderPunkRecords() }; // dessinés à la première visite seulement
     const tabReady = new Set();
 
