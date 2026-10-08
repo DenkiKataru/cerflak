@@ -7,10 +7,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <style>
     body { margin:0; font-family: -apple-system, sans-serif; background:#111; color:#eee; height:100dvh; display:flex; }
-    nav { width:64px; background:#1c1c1c; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:16px; }
+    nav { width:64px; background:#1c1c1c; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:14px; }
+    nav .tab { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; width:100%; font-size:9px; color:#aaa; text-align:center; -webkit-tap-highlight-color:transparent; }
+    nav .tab.active { color:#eee; }
+    nav .tab.active .icon { background:#4a7; }
     nav .icon { width:32px; height:32px; border-radius:8px; background:#333; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; }
-    nav .icon.active { background:#4a7; }
-    main { flex:1; display:flex; align-items:safe center; justify-content:safe center; padding:24px; box-sizing:border-box; overflow-y:auto; }
+    #views { flex:1; display:flex; min-width:0; }
+    main.view[hidden] { display:none; }
+    main.view { flex:1; display:flex; align-items:safe center; justify-content:safe center; padding:24px; box-sizing:border-box; overflow-y:auto; }
     .welcome h1 { font-weight:400; }
     .panel { width:100%; max-width:600px; display:flex; flex-direction:column; gap:16px; }
     .panel textarea { width:100%; height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:monospace; font-size:14px; box-sizing:border-box; resize:vertical; }
@@ -39,22 +43,29 @@
 </head>
 <body>
   <nav>
-    <div class="icon" id="nav-scriptum" title="Scriptum">S</div>
-    <div class="icon" id="nav-punkrecords" title="Punk Records">P</div>
-    <div class="icon"></div>
-    <div class="icon"></div>
-    <div class="icon"></div>
-    <div class="icon"></div>
+    <div class="tab" id="nav-scriptum" data-tab="scriptum" title="Scriptum"><div class="icon">S</div><span>Scriptum</span></div>
+    <div class="tab" id="nav-punkrecords" data-tab="punk" title="Punk Records"><div class="icon">P</div><span>Punk Records</span></div>
+    <div class="tab" id="nav-dedale" data-tab="dedale" title="Dédale"><div class="icon">D</div><span>Dédale</span></div>
+    <div class="tab" id="nav-copmonk" data-tab="copmonk" title="CopMonk"><div class="icon">C</div><span>CopMonk</span></div>
   </nav>
-  <main id="main-content">
-    <div class="welcome"><h1>Cerflak</h1></div>
-  </main>
+  <div id="views">
+    <!-- Chaque onglet a sa propre zone, masquée mais jamais détruite : le travail en cours survit au changement d'onglet -->
+    <main class="view" id="view-gate"><div class="welcome"><h1>Cerflak</h1></div></main>
+    <main class="view" id="view-scriptum" hidden></main>
+    <main class="view" id="view-punk" hidden></main>
+    <main class="view" id="view-dedale" hidden>
+      <div class="panel"><h2>Dédale</h2><p>Les cartes mentales arrivent bientôt.</p></div>
+    </main>
+    <main class="view" id="view-copmonk" hidden>
+      <div class="panel"><h2>CopMonk</h2><p>L'archivage d'articles web arrive bientôt.</p></div>
+    </main>
+  </div>
 
   <script src="scriptum.js"></script>
   <script>
-    const mainContent = document.getElementById('main-content');
-    const navScriptum = document.getElementById('nav-scriptum');
-    const navPunkRecords = document.getElementById('nav-punkrecords');
+    const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
+    const scriptumView = document.getElementById('view-scriptum');
+    const punkView = document.getElementById('view-punk');
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -62,7 +73,7 @@
     const TOKEN_STORAGE_KEY = 'cerflak-api-token-enc';
     let currentCryptoKey = null;
     let apiToken = null; // jeton unique Kura + OTS/export : en mémoire seulement, chiffré sur disque
-    let postUnlockAction = null; // où aller après un déverrouillage (ex. Punk Records)
+    let pendingTab = null; // onglet demandé avant le déverrouillage
     let sessionPassword = null;
     let pendingOpenParams = null;
 const urlParams = new URLSearchParams(window.location.search);
@@ -86,7 +97,7 @@ if (urlParams.get('fichier')) {
     }
 
     function renderTokenScreen(next) {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <h2>Jeton d'accès</h2>
           <p>Colle le jeton depuis Bitwarden. Il ne sera demandé qu'une fois sur cet appareil.</p>
@@ -133,7 +144,7 @@ if (urlParams.get('fichier')) {
 
     // --- Écran : définir un mot de passe local (protège la clé stockée sur cet appareil) ---
     function renderSetPasswordScreen(keyBytes, onDone) {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <h2>Protéger l'accès sur cet appareil</h2>
           <p>Choisis un mot de passe pour déverrouiller Scriptum rapidement ici. Note-le aussi dans Bitwarden.</p>
@@ -176,7 +187,7 @@ if (urlParams.get('fichier')) {
 
     // --- Écran : déverrouillage par mot de passe (clé déjà protégée sur cet appareil) ---
     function renderUnlockScreen() {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <h2>Scriptum</h2>
           <form id="s-unlock-form" class="row" autocomplete="on">
@@ -205,13 +216,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
           statusEl.textContent = 'Mot de passe incorrect.';
           return;
         }
-        ensureApiToken(() => {
-          const action = postUnlockAction;
-          postUnlockAction = null;
-          if (action) action();
-          else if (pendingOpenParams) renderOpenScreen();
-          else renderEditor();
-        });
+        ensureApiToken(finishUnlock);
       }
 
       // Le formulaire sert à Bitwarden ; on bloque l'envoi réel (pas de rechargement de page)
@@ -224,7 +229,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
 
     // --- Écran : restauration depuis un code de récupération (mot de passe oublié) ---
     function renderRestoreScreen() {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <h2>Restaurer depuis un code de récupération</h2>
           <div class="row">
@@ -239,7 +244,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         const code = document.getElementById('s-restore-input').value.trim();
         try {
           const keyBytes = Scriptum.recoveryCodeToKey(code);
-          renderSetPasswordScreen(keyBytes, renderEditor);
+          renderSetPasswordScreen(keyBytes, finishUnlock);
         } catch (e) {
           statusEl.textContent = 'Code invalide : ' + e.message;
         }
@@ -248,7 +253,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
 
     // --- Écran : première utilisation (générer ou restaurer) ---
     function renderSetupScreen() {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <h2>Scriptum — Première utilisation</h2>
           <p>Génère une nouvelle clé, ou restaure-en une depuis un code de récupération existant.</p>
@@ -277,7 +282,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         const code = document.getElementById('s-restore-input').value.trim();
         try {
           const keyBytes = Scriptum.recoveryCodeToKey(code);
-          renderSetPasswordScreen(keyBytes, renderEditor);
+          renderSetPasswordScreen(keyBytes, finishUnlock);
         } catch (e) {
           statusEl.textContent = 'Code invalide : ' + e.message;
         }
@@ -285,7 +290,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
     }
 
     function renderRecoveryScreen(code, keyBytes) {
-      mainContent.innerHTML = `
+      gateView.innerHTML = `
         <div class="panel">
           <div class="recovery-box">
             <h2>Ton code de récupération</h2>
@@ -301,11 +306,11 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       const checkbox = document.getElementById('s-confirm-saved');
       const continueBtn = document.getElementById('s-continue');
       checkbox.addEventListener('change', () => { continueBtn.disabled = !checkbox.checked; });
-      continueBtn.addEventListener('click', () => renderSetPasswordScreen(keyBytes, renderEditor));
+      continueBtn.addEventListener('click', () => renderSetPasswordScreen(keyBytes, finishUnlock));
     }
 
     function renderShowRecoveryScreen(code) {
-      mainContent.innerHTML = `
+      scriptumView.innerHTML = `
         <div class="panel">
           <div class="recovery-box">
             <h2>Code de récupération de cet appareil</h2>
@@ -323,7 +328,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
     let currentJsonContent = null;
 
     function renderEditor() {
-      mainContent.innerHTML = `
+      scriptumView.innerHTML = `
         <div class="panel">
           <div class="row">
             <input type="text" id="s-subfolder" placeholder="Sous-dossier (ex: Plumaisons)">
@@ -543,7 +548,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
     }
 
     function renderOpenScreen() {
-      mainContent.innerHTML = `
+      scriptumView.innerHTML = `
         <div class="panel">
           <h2>Ouvrir un fichier</h2>
           <div class="row">
@@ -637,7 +642,7 @@ if (pendingOpenParams) {
     }
 
     function renderPunkRecords() {
-      mainContent.innerHTML = `
+      punkView.innerHTML = `
         <div class="panel">
           <h2>Punk Records</h2>
           <div class="row">
@@ -714,7 +719,7 @@ if (pendingOpenParams) {
     }
 
     async function renderPunkRecordsList(type) {
-      mainContent.innerHTML = `
+      punkView.innerHTML = `
         <div class="panel">
           <h2>Punk Records — ${type}</h2>
           <div class="status" id="prl-status">Chargement...</div>
@@ -762,7 +767,7 @@ if (pendingOpenParams) {
       } else {
         mediaHtml = `<video controls style="width:100%;max-height:500px;background:#000;" src="${url}"></video>`;
       }
-      mainContent.innerHTML = `
+      punkView.innerHTML = `
         <div class="panel">
           <h2>${filename}</h2>
           ${mediaHtml}
@@ -812,35 +817,50 @@ if (pendingOpenParams) {
       });
     }
 
-    navScriptum.addEventListener('click', () => {
-      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
-      navScriptum.classList.add('active');
-      if (currentCryptoKey) {
-        renderEditor();
+    // --- Navigation : quatre onglets, un seul verrou pour toute l'appli ---
+    const TAB_VIEWS = { scriptum: scriptumView, punk: punkView, dedale: document.getElementById('view-dedale'), copmonk: document.getElementById('view-copmonk') };
+    const TAB_INIT = { scriptum: () => renderEditor(), punk: () => renderPunkRecords() }; // dessinés à la première visite seulement
+    const tabReady = new Set();
+
+    function showView(viewEl, tabName) {
+      document.querySelectorAll('#views > .view').forEach(v => { v.hidden = (v !== viewEl); });
+      document.querySelectorAll('nav .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    }
+
+    function showTab(name) {
+      showView(TAB_VIEWS[name], name);
+      if (!tabReady.has(name)) {
+        tabReady.add(name);
+        if (TAB_INIT[name]) TAB_INIT[name]();
+      }
+    }
+
+    // Après un déverrouillage réussi (clé + jeton en mémoire) : on va à l'onglet demandé
+    function finishUnlock() {
+      const name = pendingTab || 'scriptum';
+      pendingTab = null;
+      if (pendingOpenParams) { // lien direct ?dossier=...&fichier=... : ouverture dans Scriptum
+        tabReady.add('scriptum');
+        showView(scriptumView, 'scriptum');
+        renderOpenScreen();
         return;
       }
-      const wrapped = localStorage.getItem(STORAGE_KEY);
-      if (wrapped) {
-        renderUnlockScreen();
-      } else {
-        renderSetupScreen();
-      }
-    });
+      showTab(name);
+    }
 
-    navPunkRecords.addEventListener('click', () => {
-      document.querySelectorAll('nav .icon').forEach(i => i.classList.remove('active'));
-      navPunkRecords.classList.add('active');
-      if (apiToken) {
-        renderPunkRecords();
-      } else if (currentCryptoKey) {
-        ensureApiToken(renderPunkRecords);
-      } else if (localStorage.getItem(STORAGE_KEY)) {
-        postUnlockAction = renderPunkRecords;
-        renderUnlockScreen();
-      } else {
-        renderSetupScreen();
+    function goToTab(name) {
+      if (currentCryptoKey && apiToken) {
+        showTab(name);
+        return;
       }
-    });
+      pendingTab = name;
+      showView(gateView, name);
+      if (currentCryptoKey) ensureApiToken(finishUnlock);
+      else if (localStorage.getItem(STORAGE_KEY)) renderUnlockScreen();
+      else renderSetupScreen();
+    }
+
+    document.querySelectorAll('nav .tab').forEach(t => t.addEventListener('click', () => goToTab(t.dataset.tab)));
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
