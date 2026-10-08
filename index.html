@@ -62,7 +62,6 @@
   <nav>
     <div class="tab" id="nav-scriptum" data-tab="scriptum" title="Scriptum"><div class="icon">S</div><span>Scriptum</span></div>
     <div class="tab" id="nav-punkrecords" data-tab="punk" title="Punk Records"><div class="icon">P</div><span>Punk Records</span></div>
-    <div class="tab" id="nav-dedale" data-tab="dedale" title="Dédale"><div class="icon">D</div><span>Dédale</span></div>
     <div class="tab" id="nav-copmonk" data-tab="copmonk" title="CopMonk"><div class="icon">C</div><span>CopMonk</span></div>
     <div class="nav-foot">
       <button type="button" id="btn-update" title="Mettre à jour l'appli (sans effacer tes données)">↻</button>
@@ -75,9 +74,6 @@
     <main class="view" id="view-gate"><div class="welcome"><h1>Cerflak</h1></div></main>
     <main class="view" id="view-scriptum" hidden></main>
     <main class="view" id="view-punk" hidden></main>
-    <main class="view" id="view-dedale" hidden>
-      <div class="panel"><h2>Dédale</h2><p>Les cartes mentales arrivent bientôt.</p></div>
-    </main>
     <main class="view" id="view-copmonk" hidden>
       <div class="panel"><h2>CopMonk</h2><p>L'archivage d'articles web arrive bientôt.</p></div>
     </main>
@@ -89,7 +85,7 @@
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
     const punkView = document.getElementById('view-punk');
-    const APP_VERSION = 'v7'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
+    const APP_VERSION = 'v8'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -100,7 +96,9 @@
     let pendingTab = null; // onglet demandé avant le déverrouillage
     let sessionPassword = null;
     let pendingOpenParams = null;
+    let pendingOpenMedia = null; // lien direct ?type=PDF&media=... vers un fichier de Punk Records
 const urlParams = new URLSearchParams(window.location.search);
+pendingOpenMedia = window.CerflakLinks.parseMediaParams(urlParams);
 if (urlParams.get('fichier')) {
   pendingOpenParams = {
     subfolder: urlParams.get('dossier') || '',
@@ -393,6 +391,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
             <div class="row">
               <label><input type="radio" name="lk-kind" value="url" checked> Adresse web (YouTube, etc.)</label>
               <label><input type="radio" name="lk-kind" value="gtext"> Autre fichier gtext</label>
+              <label><input type="radio" name="lk-kind" value="media"> Fichier Punk Records (PDF, son, vidéo)</label>
             </div>
             <div class="row" id="lk-url-row">
               <input type="text" id="lk-url" placeholder="https://www.youtube.com/..." inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false">
@@ -405,6 +404,20 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
               <div class="link-files" id="lk-files"></div>
               <div class="row">
                 <input type="text" id="lk-filename" placeholder="Nom du fichier (ex: poeme1.gtext)" autocomplete="off">
+              </div>
+            </div>
+            <div id="lk-media-row" hidden>
+              <div class="row">
+                <select class="tb-select" id="lk-media-type" title="Dossier de Punk Records">
+                  <option value="PDF">PDF</option>
+                  <option value="SONS">Sons</option>
+                  <option value="VIDÉOS">Vidéos</option>
+                </select>
+                <button type="button" id="lk-media-list">Lister</button>
+              </div>
+              <div class="link-files" id="lk-media-files"></div>
+              <div class="row">
+                <input type="text" id="lk-media-name" placeholder="Nom du fichier" autocomplete="off">
               </div>
             </div>
             <div class="row">
@@ -506,6 +519,9 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       const lkSubfolder = document.getElementById('lk-subfolder');
       const lkFilename = document.getElementById('lk-filename');
       const lkFiles = document.getElementById('lk-files');
+      const lkMediaType = document.getElementById('lk-media-type');
+      const lkMediaName = document.getElementById('lk-media-name');
+      const lkMediaFiles = document.getElementById('lk-media-files');
       let activeLink = null; // le lien affiché dans la barre ou en cours de modification
       let linkMode = 'new';  // 'new' (sur la sélection) ou 'edit' (lien existant)
 
@@ -527,6 +543,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
       function describeTarget(a) {
         const t = L.parseLinkTarget(a.getAttribute('href'));
         if (!t) return 'Lien non valide';
+        if (t.kind === 'media') return `Punk Records (${t.type}) : ${t.filename}`;
         return t.kind === 'gtext' ? `Fichier : ${t.subfolder ? t.subfolder + '/' : ''}${t.filename}` : t.href;
       }
       function hideLinkBar() { linkBar.hidden = true; if (linkMode !== 'edit' || linkBox.hidden) activeLink = null; }
@@ -540,6 +557,7 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         linkBox.querySelector(`input[name="lk-kind"][value="${kind}"]`).checked = true;
         document.getElementById('lk-url-row').hidden = kind !== 'url';
         document.getElementById('lk-gtext-row').hidden = kind !== 'gtext';
+        document.getElementById('lk-media-row').hidden = kind !== 'media';
       }
       function openLinkBox(mode, a) {
         linkMode = mode;
@@ -547,7 +565,9 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         linkBar.hidden = true;
         lkStatus.textContent = '';
         lkFiles.innerHTML = '';
-        lkUrl.value = lkSubfolder.value = lkFilename.value = '';
+        lkMediaFiles.innerHTML = '';
+        lkUrl.value = lkSubfolder.value = lkFilename.value = lkMediaName.value = '';
+        lkMediaType.value = 'PDF';
         setLinkKind('url');
         const t = a && L.parseLinkTarget(a.getAttribute('href'));
         if (t && t.kind === 'url') lkUrl.value = t.href;
@@ -556,8 +576,13 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
           lkSubfolder.value = t.subfolder;
           lkFilename.value = t.filename;
         }
+        if (t && t.kind === 'media') {
+          setLinkKind('media');
+          lkMediaType.value = t.type;
+          lkMediaName.value = t.filename;
+        }
         linkBox.hidden = false;
-        (t && t.kind === 'gtext' ? lkFilename : lkUrl).focus();
+        (t && t.kind === 'gtext' ? lkFilename : t && t.kind === 'media' ? lkMediaName : lkUrl).focus();
       }
       function closeLinkBox() { linkBox.hidden = true; activeLink = null; }
 
@@ -599,12 +624,37 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         }
       });
 
+      document.getElementById('lk-media-list').addEventListener('click', async () => {
+        const type = lkMediaType.value;
+        lkStatus.textContent = 'Chargement...';
+        lkMediaFiles.innerHTML = '';
+        try {
+          const resp = await fetch(`${KURA_API_BASE}/media-list?type=${encodeURIComponent(type)}`, { headers: { 'X-Api-Secret': apiToken } });
+          if (!resp.ok) throw new Error(`Échec de la liste (${resp.status})`);
+          const data = await resp.json();
+          if (!data.files || data.files.length === 0) { lkStatus.textContent = 'Aucun fichier trouvé.'; return; }
+          lkStatus.textContent = '';
+          data.files.forEach((f) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = f.keywords && f.keywords.length ? `${f.name} — ${f.keywords.join(', ')}` : f.name;
+            b.addEventListener('click', () => { lkMediaName.value = f.name; lkMediaFiles.innerHTML = ''; });
+            lkMediaFiles.appendChild(b);
+          });
+        } catch (e) {
+          lkStatus.textContent = 'Erreur : ' + e.message;
+        }
+      });
+
       document.getElementById('lk-ok').addEventListener('click', () => {
         const kind = linkBox.querySelector('input[name="lk-kind"]:checked').value;
         let href;
         if (kind === 'url') {
           href = L.normalizeWebUrl(lkUrl.value);
           if (!href) { lkStatus.textContent = 'Adresse non valide. Exemple : https://www.youtube.com/watch?v=...'; return; }
+        } else if (kind === 'media') {
+          href = L.buildMediaLink(lkMediaType.value, lkMediaName.value);
+          if (!href) { lkStatus.textContent = 'Indique le nom du fichier de Punk Records.'; return; }
         } else {
           href = L.buildGtextLink(lkSubfolder.value, lkFilename.value);
           if (!href) { lkStatus.textContent = 'Indique le nom du fichier.'; return; }
@@ -647,6 +697,12 @@ passInput.value = ''; // on vide le champ : rien ne reste dans la page
         if (!t) { statusEl.textContent = 'Lien non valide.'; return; }
         if (t.kind === 'url') {
           window.open(t.href, '_blank', 'noopener,noreferrer'); // seules les adresses http/https passent
+          return;
+        }
+        if (t.kind === 'media') {
+          // Le texte de Scriptum reste intact derrière : on revient dessus en touchant l'onglet Scriptum
+          showTab('punk');
+          renderPunkRecordsDetail(t.type, t.filename);
           return;
         }
         const hasUnsaved = editor.innerText.trim() !== '' && editor.innerHTML !== lastSavedHtml;
@@ -949,6 +1005,11 @@ if (pendingOpenParams) {
       document.getElementById('pr-rhyme-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doRhymeSearch(); });
     }
 
+    // Un nom de fichier peut venir d'une adresse (lien) : on l'affiche toujours comme du texte, jamais comme du code
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
     async function renderPunkRecordsList(type) {
       punkView.innerHTML = `
         <div class="panel">
@@ -1000,7 +1061,7 @@ if (pendingOpenParams) {
       }
       punkView.innerHTML = `
         <div class="panel">
-          <h2>${filename}</h2>
+          <h2>${escapeHtml(filename)}</h2>
           ${mediaHtml}
           <div class="row">
             <input type="text" id="prd-keywords" placeholder="Mots-clés, séparés par des virgules">
@@ -1049,7 +1110,7 @@ if (pendingOpenParams) {
     }
 
     // --- Navigation : quatre onglets, un seul verrou pour toute l'appli ---
-    const TAB_VIEWS = { scriptum: scriptumView, punk: punkView, dedale: document.getElementById('view-dedale'), copmonk: document.getElementById('view-copmonk') };
+    const TAB_VIEWS = { scriptum: scriptumView, punk: punkView, copmonk: document.getElementById('view-copmonk') };
     const TAB_INIT = { scriptum: () => renderEditor(), punk: () => renderPunkRecords() }; // dessinés à la première visite seulement
     const tabReady = new Set();
 
@@ -1071,6 +1132,14 @@ if (pendingOpenParams) {
       requestPersistentStorage(); // demande au navigateur de ne pas effacer les données de l'appli
       const name = pendingTab || 'scriptum';
       pendingTab = null;
+      if (pendingOpenMedia) { // lien direct ?type=...&media=... : ouverture dans Punk Records
+        const m = pendingOpenMedia;
+        pendingOpenMedia = null;
+        tabReady.add('punk');
+        showView(punkView, 'punk');
+        renderPunkRecordsDetail(m.type, m.filename);
+        return;
+      }
       if (pendingOpenParams) { // lien direct ?dossier=...&fichier=... : ouverture dans Scriptum
         tabReady.add('scriptum');
         showView(scriptumView, 'scriptum');

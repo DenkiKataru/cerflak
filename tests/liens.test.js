@@ -42,3 +42,24 @@ test('une adresse web ordinaire est reconnue comme telle, le reste est refusé',
   // la page d'accueil de l'appli sans fichier = simple adresse web
   assert.strictEqual(L.parseLinkTarget(L.APP_URL + '?dossier=X').kind, 'url');
 });
+
+test('lien vers un fichier de Punk Records : construction et lecture (aller-retour)', () => {
+  const href = L.buildMediaLink('VIDÉOS', 'clip été.mp4');
+  assert.strictEqual(href, 'https://denkikataru.github.io/cerflak/?type=VID%C3%89OS&media=clip%20%C3%A9t%C3%A9.mp4');
+  assert.deepStrictEqual(L.parseLinkTarget(href), { kind: 'media', type: 'VIDÉOS', filename: 'clip été.mp4' });
+  assert.deepStrictEqual(L.parseLinkTarget(L.buildMediaLink('PDF', 'a&b#c.pdf')), { kind: 'media', type: 'PDF', filename: 'a&b#c.pdf' });
+});
+
+test('lien Punk Records : type inconnu ou nom vide refusés', () => {
+  assert.strictEqual(L.buildMediaLink('IMAGES', 'x.png'), null);
+  assert.strictEqual(L.buildMediaLink('PDF', '   '), null);
+  assert.strictEqual(L.buildMediaLink(undefined, 'x'), null);
+  assert.strictEqual(L.parseMediaParams(new URLSearchParams('type=IMAGES&media=x')), null);
+  assert.strictEqual(L.parseMediaParams(new URLSearchParams('type=PDF')), null);
+  assert.deepStrictEqual(L.parseMediaParams(new URLSearchParams('type=SONS&media=a.mp3')), { type: 'SONS', filename: 'a.mp3' });
+});
+
+test('un lien gtext reste reconnu comme gtext (le fichier prime sur le média)', () => {
+  const href = L.APP_URL + '?dossier=D&fichier=f.gtext&type=PDF&media=x';
+  assert.strictEqual(L.parseLinkTarget(href).kind, 'gtext');
+});

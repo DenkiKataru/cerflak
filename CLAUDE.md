@@ -1,6 +1,6 @@
 # Cerflak : contexte du projet
 
-Cerflak est une application d'écriture et d'archivage unifiée, développée par un auteur indépendant (non développeur de métier). Elle tient dans **une seule application à quatre onglets** : Scriptum (éditeur chiffré), Punk Records (fichiers + rimes), Dédale (mind mapping) et CopMonk (archivage d'articles web, version améliorée d'Archiveur).
+Cerflak est une application d'écriture et d'archivage unifiée, développée par un auteur indépendant (non développeur de métier). Elle tient dans **une seule application à trois onglets** : Scriptum (éditeur chiffré), Punk Records (fichiers + rimes) et CopMonk (archivage d'articles web, version améliorée d'Archiveur). L'onglet Dédale (mind mapping) a été abandonné : les liens de Scriptum vers les fichiers de Punk Records le remplacent.
 
 ## Règles de collaboration
 
@@ -18,12 +18,14 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 
 - Deux cibles seulement : Honor Magic 7 (Android) et Mac. Pas de Windows.
 - Une seule PWA (HTML/JS), hébergée sur GitHub Pages, dépôt `DenkiKataru/cerflak`, URL `https://denkikataru.github.io/cerflak/`.
-- Interface en **quatre onglets** : Scriptum, Punk Records, Dédale, CopMonk. Une seule base de code, une seule navigation. La clé de chiffrement déverrouillée reste en mémoire le temps de la session et sert à tous les onglets (pas de nouveau mot de passe en changeant d'onglet). Charger les onglets lourds à la demande pour garder un démarrage rapide.
+- Interface en **trois onglets** : Scriptum, Punk Records, CopMonk. Une seule base de code, une seule navigation. La clé de chiffrement déverrouillée reste en mémoire le temps de la session et sert à tous les onglets (pas de nouveau mot de passe en changeant d'onglet). Charger les onglets lourds à la demande pour garder un démarrage rapide.
 - Capacitor est abandonné (complexité du toolchain Android). Ne pas le réintroduire sans me le demander.
 - Attention au cache du service worker : après chaque déploiement, prévoir un moyen de forcer la mise à jour de la PWA.
 
 ## Abandons définitifs (ne pas réintroduire)
 
+- Dédale (mind mapping) : onglet retiré. Ne pas le réintroduire sans me le demander.
+- Synchronisation automatique et gestion de conflits de Scriptum (auto-save local, envoi périodique vers Kura, indicateur d'état) : abandonnées.
 - LanguageTool, LibreTranslate et Mother Thong : la qualité de traduction obtenue était mauvaise. Plus de module correcteur/traducteur dans Cerflak.
 - Windows / Shadow comme cible.
 
@@ -43,7 +45,8 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 - Ouverture directe par URL : `?dossier=...&fichier=...`, déclenchée juste après un déverrouillage réussi, via la fonction `openFile` existante.
 - Interface cible : style Word, **police Georgia** (Mac), taille modifiable (11 par défaut), gras / italique / souligné, alignements gauche / droite / centré / justifié, copier-coller. Le zoom au pincement n'est plus une exigence. Sur Android, où Georgia est absente, la police de secours est **Gelasio** (licence libre SIL OFL, embarquée dans `fonts/`).
 - Export : PDF (chiffré) et ODT via le serveur, déjà en place. **Décision : pas d'import ni d'ouverture de docx, odt ou pdf dans Scriptum, et pas d'export docx** (abandonné, ne pas réintroduire sans me le demander).
-- Règles de sync à implémenter : le fichier original reste sur l'appareil d'écriture ; « Enregistrer sur Kura » envoie une copie ; à l'ouverture sur un autre appareil, vérification non bloquante d'une version plus récente sur Kura ; en cas de conflit, trois choix (garder le local, récupérer Kura, garder les deux sous un nom séparé) ; auto-save local fréquent (quelques secondes d'inactivité) distinct de l'envoi vers Kura (30 s à 2 min) ; indicateur à trois états (synchronisé / en cours / échec) avec retry automatique et heure de dernière sauvegarde réussie au tap sur l'icône d'échec.
+- **Décision : pas de synchronisation automatique ni de gestion de conflits** (abandonné). L'enregistrement sur Kura reste une action manuelle.
+- Liens dans le texte (faits) : sélection de texte → adresse web, autre gtext, ou fichier de Punk Records (PDF, son, vidéo). Un lien est un `<a href>` dans le texte ; les liens vers un gtext ou un fichier Punk Records sont des adresses de l'appli (`?dossier=...&fichier=...` ou `?type=...&media=...`), donc cliquables aussi dans les exports PDF.
 - Le bouton Horodater envoie déjà par mail le fichier gtext chiffré avec la preuve OTS. **Décision : pas de PDF chiffré supplémentaire dans Horodater** (abandonné).
 - Surveillance automatique (ping) de Kura à prévoir, pour éviter une panne silencieuse.
 
@@ -60,21 +63,12 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 - À cadrer dans le plan : comment capturer un article depuis le téléphone ou le Mac (partage Android, bookmarklet, coller une URL), extraction du contenu lisible côté VPS, génération du PDF, et sa mise en place dans Punk Records avec des mots-clés.
 - Données centralisées sur Kura via le VPS, comme le reste.
 
-## Onglet Dédale (périmètre à cadrer)
-
-- Mind mapping façon Inspiration : des satellites (rectangles avec un titre) reliés par des flèches.
-- Un satellite peut être associé à un fichier Punk Records (vidéo, PDF, son), un article CopMonk, un lien YouTube ou un `.gtext` (ouverture via le mécanisme d'URL de Scriptum).
-- Toute la carte tient dans un fichier JSON enregistré sur Kura via le VPS.
-- Utiliser une bibliothèque de graphe existante (React Flow ou Cytoscape) plutôt que tout recoder. Le tactile (déplacer, zoomer, relier au doigt) doit marcher sur le Magic 7.
-
 ## Feuille de route (dans cet ordre)
 
-0. Test WebAuthn : page jetable, hors de l'app principale. Vérifier si l'extension PRF permet de dériver une clé de chiffrement sur le Magic 7 (navigateur utilisé à préciser) et sur le Mac (Touch ID). Si PRF échoue : l'empreinte sert seulement de verrou d'écran, le mot de passe reste la vraie protection. Pas de Capacitor.
-1. Coquille à quatre onglets : intégrer Scriptum existant et créer les trois autres onglets vides, avec la clé de chiffrement partagée en mémoire.
-2. Finir Scriptum : Georgia avec Gelasio en secours (import docx / odt / pdf et PDF chiffré dans Horodater abandonnés).
-3. Liens dans le texte de Scriptum : une plage de texte avec une cible (autre .gtext, fichier Punk Records, URL), cliquable. Stocker les liens dans le format .gtext sans casser les anciens fichiers.
-4. Sync et conflits de Scriptum, et surveillance de Kura.
-5. Dédale minimal : satellites, flèches, un .gtext attaché, sauvegarde JSON.
-6. Punk Records : catalogage par mots-clés.
-7. CopMonk : archivage d'articles web en PDF vers Punk Records.
-8. Liens des satellites de Dédale vers Punk Records, CopMonk et YouTube.
+0. Test WebAuthn : fait (page jetable hors de l'app principale).
+1. Coquille à onglets avec clé et jeton partagés en mémoire : faite (trois onglets).
+2. Finir Scriptum : Georgia avec Gelasio en secours : fait (import docx / odt / pdf, PDF chiffré dans Horodater et synchronisation automatique abandonnés).
+3. Liens dans le texte de Scriptum : faits (adresse web, autre gtext, fichier de Punk Records). Reste à ajouter les articles CopMonk comme cibles quand CopMonk existera.
+4. Punk Records : catalogage par mots-clés (rattacher le moteur de rimes aux mots-clés des fichiers).
+5. CopMonk : archivage d'articles web en PDF vers Punk Records.
+6. Surveillance (ping) de Kura : à reprendre plus tard si je le redemande.
