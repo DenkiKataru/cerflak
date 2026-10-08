@@ -85,7 +85,7 @@
     const gateView = document.getElementById('view-gate');       // écrans de verrou (mot de passe, jeton, première utilisation)
     const scriptumView = document.getElementById('view-scriptum');
     const punkView = document.getElementById('view-punk');
-    const APP_VERSION = 'v8'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
+    const APP_VERSION = 'v9'; // identique à CACHE_NAME dans sw.js (vérifié par tests/version.test.js)
     const STORAGE_KEY = 'scriptum-wrapped-key';
     const KURA_API_BASE = 'https://scriptum-api.lesplumeslestees.fr';
     const OTS_API_URL = 'https://scriptum-api.lesplumeslestees.fr/stamp';
@@ -1162,6 +1162,9 @@ if (pendingOpenParams) {
     }
 
     document.querySelectorAll('nav .tab').forEach(t => t.addEventListener('click', () => goToTab(t.dataset.tab)));
+
+    // Lien direct (depuis un PDF, un message...) : on demande tout de suite le mot de passe, sans attendre un toucher sur un onglet
+    if (pendingOpenParams || pendingOpenMedia) goToTab('scriptum');
 
     // --- Version, stockage durable et mise à jour sans effacer les données ---
     document.getElementById('app-version').textContent = APP_VERSION;
