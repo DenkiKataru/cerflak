@@ -6,6 +6,9 @@
   <title>Cerflak</title>
   <link rel="manifest" href="manifest.webmanifest">
   <style>
+    /* Gelasio (licence libre SIL OFL, voir fonts/OFL-Gelasio.txt) : police de secours proche de Georgia, utilisée quand Georgia est absente (Android) */
+    @font-face { font-family:'Gelasio'; font-style:normal; font-weight:400 700; font-display:swap; src:url('fonts/Gelasio-latin.woff2') format('woff2'); }
+    @font-face { font-family:'Gelasio'; font-style:italic; font-weight:400 700; font-display:swap; src:url('fonts/Gelasio-Italic-latin.woff2') format('woff2'); }
     body { margin:0; font-family: -apple-system, sans-serif; background:#111; color:#eee; height:100dvh; display:flex; }
     nav { width:64px; background:#1c1c1c; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:14px; }
     nav .tab { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; width:100%; font-size:9px; color:#aaa; text-align:center; -webkit-tap-highlight-color:transparent; }
@@ -36,7 +39,7 @@
     .tb-btn.active { background:#4a7; border-color:#4a7; }
     .tb-sep { width:1px; height:22px; background:#444; margin:0 4px; }
     .tb-select { background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:6px; padding:6px 8px; font-family:monospace; }
-    .editor { width:100%; min-height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:'Bookman Old Style','Book Antiqua',Palatino,serif; font-size:11pt; box-sizing:border-box; overflow-y:auto; }
+    .editor { width:100%; min-height:280px; background:#1a1a1a; color:#eee; border:1px solid #333; border-radius:8px; padding:12px; font-family:Georgia,'Gelasio',serif; font-size:11pt; box-sizing:border-box; overflow-y:auto; }
     .editor:focus { outline:1px solid #4a7; }
     .editor:empty:before { content: attr(data-placeholder); color:#666; }
   </style>
