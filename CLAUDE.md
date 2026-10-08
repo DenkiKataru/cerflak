@@ -57,7 +57,7 @@ Cerflak est une application d'écriture et d'archivage unifiée, développée pa
 
 ## Feuille de route (dans cet ordre)
 
-0. Test WebAuthn : fait (page jetable hors de l'app principale).
+0. Test WebAuthn : fait (pages de test jetables, supprimées du dépôt).
 1. Coquille à onglets avec clé et jeton partagés en mémoire : faite (deux onglets).
 2. Finir Scriptum : Georgia avec Gelasio en secours : fait (import docx / odt / pdf, PDF chiffré dans Horodater et synchronisation automatique abandonnés).
 3. Liens dans le texte de Scriptum : faits (adresse web, autre gtext, fichier de Punk Records).
